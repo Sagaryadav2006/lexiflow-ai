@@ -1,0 +1,104 @@
+from presidio_analyzer import AnalyzerEngine
+
+# Initialize the analyzer engine once
+analyzer = AnalyzerEngine()
+
+# The specific entities we care about
+ENTITIES_TO_MASK = [
+    "PERSON",
+    "ORGANIZATION",
+    "LOCATION",
+    "MONEY",
+    "EMAIL_ADDRESS",
+    "PHONE_NUMBER",
+    "DATE_TIME"
+]
+
+def mask_pii(text: str) -> tuple[str, dict]:
+    """
+    Masks PII in the given text using Presidio.
+    Returns the masked text and a mapping dictionary for deanonymization.
+    """
+    results = analyzer.analyze(text=text, entities=ENTITIES_TO_MASK, language='en')
+    
+    # Pass 1: Assign tokens left-to-right
+    results.sort(key=lambda x: x.start, reverse=False)
+    
+    mapping = {}
+    counters = {ent: 1 for ent in ENTITIES_TO_MASK}
+    seen_texts = {} # mapping (entity_type, original_text) -> token
+    
+    # We also need to map each result to its token for the second pass
+    result_tokens = []
+    
+    counters.update({"COMPANY": 1, "ADDRESS": 1, "ZIP_CODE": 1, "STATE": 1})
+
+    for result in results:
+        original_text = text[result.start:result.end].strip()
+        entity_type = result.entity_type
+        
+        seen_key = (entity_type, original_text)
+        if seen_key in seen_texts:
+            token = seen_texts[seen_key]
+        else:
+            token = f"<{entity_type}_{counters[entity_type]}>"
+            seen_texts[seen_key] = token
+            counters[entity_type] += 1
+            mapping[token] = original_text
+            
+        result_tokens.append((result, token))
+        
+    # Pass 2: Replace tokens right-to-left to safely modify the string
+    result_tokens.sort(key=lambda x: x[0].start, reverse=True)
+    masked_text = text
+    
+    for result, token in result_tokens:
+        masked_text = masked_text[:result.start] + token + masked_text[result.end:]
+        
+    import re
+    def replace_pattern(pattern, entity_type, current_text, skip_func=None):
+        nonlocal mapping, counters, seen_texts
+        new_text = current_text
+        matches = list(re.finditer(pattern, current_text))
+        matches.sort(key=lambda x: x.start(), reverse=True)
+        for match in matches:
+            original_val = current_text[match.start():match.end()].strip()
+            if skip_func and skip_func(original_val):
+                continue
+            seen_key = (entity_type, original_val)
+            if seen_key in seen_texts:
+                token = seen_texts[seen_key]
+            else:
+                token = f"<{entity_type}_{counters[entity_type]}>"
+                seen_texts[seen_key] = token
+                counters[entity_type] += 1
+                mapping[token] = original_val
+            new_text = new_text[:match.start()] + token + new_text[match.end():]
+        return new_text
+
+    company_pattern = r'\b[A-Z][A-Za-z0-9&\.\-\s]{1,35}?\b(?:Inc\.|Corp\.|Corporation|LLC|Ltd\.|LLP|Megacorp|Co\.|Enterprises|Solutions|Technologies|Group)\b'
+    masked_text = replace_pattern(company_pattern, "COMPANY", masked_text, lambda x: x.lower() in ['the company', 'company', '"company"'])
+
+    address_pattern = r'\b\d{1,6}\s+[A-Za-z0-9\.\-\s]{2,30}?\b(?:Blvd|Boulevard|St|Street|Ave|Avenue|Rd|Road|Ln|Lane|Dr|Drive|Way|Court|Ct|Pl|Place|Hostel|Parkway|Pkwy)\.?\b'
+    masked_text = replace_pattern(address_pattern, "ADDRESS", masked_text)
+
+    address_partial = r'\b\d{1,6}\s+[A-Z][A-Za-z0-9\s]{2,25}(?=\s*<LOCATION_)'
+    masked_text = replace_pattern(address_partial, "ADDRESS", masked_text)
+
+    zip_code_pattern = r'\b\d{5}(?:-\d{4})?\b'
+    masked_text = replace_pattern(zip_code_pattern, "ZIP_CODE", masked_text)
+
+    state_pattern = r'\b[A-Z]{2}(?=\s+<ZIP_CODE_|\s+\d{5})'
+    masked_text = replace_pattern(state_pattern, "STATE", masked_text)
+
+    return masked_text, mapping
+
+def unmask_pii(masked_text: str, mapping: dict) -> str:
+    """
+    Replaces tokens in the masked text with their original values from the mapping.
+    """
+    unmasked_text = masked_text
+    # Sort keys longest-first to prevent substring collisions (e.g. <PERSON_1> vs <PERSON_10>)
+    for token in sorted(mapping.keys(), key=len, reverse=True):
+        unmasked_text = unmasked_text.replace(token, mapping[token])
+    return unmasked_text

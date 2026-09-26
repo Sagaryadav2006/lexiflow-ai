@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+motor
+python-dotenv
+presidio-analyzer
+presidio-anonymizer
+python-multipart
+spacy
+langchain-google-genai
+langgraph
+python-docx
