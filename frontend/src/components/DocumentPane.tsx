@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { Clause } from '../hooks/useAgentStream';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -18,6 +18,16 @@ export function DocumentPane({ clauses, currentIndex, setCurrentIndex, onCommitS
   const { toast } = useToast();
   const [isCommitting, setIsCommitting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const pillRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const safeIndex = clauses && clauses.length > 0 ? Math.max(0, Math.min(currentIndex, clauses.length - 1)) : 0;
+
+  useEffect(() => {
+    const activePill = pillRefs.current[safeIndex];
+    if (activePill) {
+      activePill.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+  }, [safeIndex, clauses.length]);
 
   if (!clauses || clauses.length === 0) {
     return (
@@ -28,7 +38,6 @@ export function DocumentPane({ clauses, currentIndex, setCurrentIndex, onCommitS
     );
   }
 
-  const safeIndex = Math.max(0, Math.min(currentIndex, clauses.length - 1));
   const activeClause = clauses[safeIndex];
   if (!activeClause) return null;
 
@@ -80,20 +89,20 @@ export function DocumentPane({ clauses, currentIndex, setCurrentIndex, onCommitS
   return (
     <div className="h-full flex flex-col bg-zinc-900/50 backdrop-blur-md rounded-2xl border border-zinc-800/80 overflow-hidden shadow-2xl shadow-black/40">
       <div className="px-5 py-3.5 border-b border-zinc-800/80 bg-zinc-900/90 backdrop-blur-xl flex justify-between items-center gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <h2 className="text-base font-semibold text-zinc-100 tracking-tight whitespace-nowrap">Contract Clause Review</h2>
           {highRiskCount > 0 ? (
-            <Badge variant="outline" className="bg-rose-500/10 text-rose-400 border-rose-500/30 flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium">
+            <Badge variant="outline" className="bg-rose-500/10 text-rose-400 border-rose-500/30 flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium whitespace-nowrap">
               <ShieldAlert className="w-3.5 h-3.5" /> {highRiskCount} Critical Flags Detected
             </Badge>
           ) : (
-            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium">
+            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium whitespace-nowrap">
               <ShieldCheck className="w-3.5 h-3.5" /> All Clear
             </Badge>
           )}
         </div>
 
-        <div className="flex flex-1 justify-center px-2 overflow-x-auto gap-2 scrollbar-hide">
+        <div className="flex flex-1 min-w-0 justify-start items-center px-2 py-1 overflow-x-auto gap-2">
           {clauses.map((c, i) => {
             const isActive = i === safeIndex;
             const cScore = c.risk_score || 0;
@@ -101,17 +110,18 @@ export function DocumentPane({ clauses, currentIndex, setCurrentIndex, onCommitS
             return (
               <button
                 key={i}
+                ref={el => { pillRefs.current[i] = el; }}
                 onClick={() => setCurrentIndex(i)}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${isActive ? 'bg-indigo-600 text-white border border-indigo-500 shadow-md shadow-indigo-950/50' : 'bg-zinc-950/80 text-zinc-400 border border-zinc-800 hover:bg-zinc-800/80 hover:text-zinc-200'}`}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap shrink-0 first:ml-auto last:mr-auto ${isActive ? 'bg-indigo-600 text-white border border-indigo-500 shadow-md shadow-indigo-950/50' : 'bg-zinc-950/80 text-zinc-400 border border-zinc-800 hover:bg-zinc-800/80 hover:text-zinc-200'}`}
               >
-                <span className={`w-2 h-2 rounded-full ${dotColor}`}></span>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`}></span>
                 Clause {i + 1}
               </button>
             );
           })}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <span className="text-xs font-medium text-zinc-400 whitespace-nowrap">
             Clause {safeIndex + 1} of {clauses.length}
           </span>
