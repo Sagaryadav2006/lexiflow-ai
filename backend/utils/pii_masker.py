@@ -1,8 +1,17 @@
 from presidio_analyzer import AnalyzerEngine
+from presidio_analyzer.nlp_engine import NlpEngineProvider
 import re
 
-# Initialize the analyzer engine once
-analyzer = AnalyzerEngine()
+# 1. Force Presidio to use the lightweight 12MB model instead of the 400MB default
+configuration = {
+    "nlp_engine_name": "spacy",
+    "models": [{"lang_code": "en", "model_name": "en_core_web_sm"}],
+}
+provider = NlpEngineProvider(nlp_configuration=configuration)
+nlp_engine = provider.create_engine()
+
+# 2. Initialize the analyzer engine once with the configured NLP engine
+analyzer = AnalyzerEngine(nlp_engine=nlp_engine, supported_languages=["en"])
 
 # The specific entities we care about (MONEY excluded so contract dollar values remain visible for financial risk calculation)
 ENTITIES_TO_MASK = [
