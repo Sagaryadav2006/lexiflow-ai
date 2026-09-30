@@ -9,6 +9,8 @@ import type { Clause } from '../hooks/useAgentStream';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 function extractSafeText(data: any, fallbackKey: string = 'text'): string {
   if (!data) return "No response generated.";
   if (typeof data === 'string') return data;
@@ -123,7 +125,7 @@ function FloatingChat({ contractId }: { contractId: string }) {
     setIsLoading(true);
 
     try {
-      const res = await fetch(`http://localhost:8000/api/contracts/${contractId}/chat`, {
+      const res = await fetch(`${API_BASE_URL}/api/contracts/${contractId}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: userMessage })
@@ -223,7 +225,7 @@ function UploadForm({ onUpload }: { onUpload: (id: string, clauses?: Clause[]) =
       const formData = new FormData();
       formData.append('file', file);
 
-      const res = await fetch('http://localhost:8000/api/contracts/upload', {
+      const res = await fetch(`${API_BASE_URL}/api/contracts/upload`, {
         method: 'POST',
         body: formData,
       });
@@ -396,7 +398,7 @@ function ReportDashboard({ contractId, clauses, onViewClause }: { contractId: st
               <><CheckCircle className="w-4 h-4 mr-2 inline" /> Audit Status: Clear</>
             )}
           </Badge>
-          <Button onClick={() => window.open('http://localhost:8000/api/contracts/' + contractId + '/export/report')} className="bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-950/40">
+          <Button onClick={() => window.open(`${API_BASE_URL}/api/contracts/${contractId}/export/report`)} className="bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-950/40">
             Export Audit Report (.docx)
           </Button>
         </div>
@@ -501,7 +503,7 @@ function EmailGeneratorView({ contractId, clauses }: { contractId: string, claus
     setIsEmailGenerating(true);
     try {
       const riskyClauses = clauses.filter(c => (c.risk_score || 0) >= 4);
-      const res = await fetch(`http://localhost:8000/api/contracts/${contractId}/generate-email`, {
+      const res = await fetch(`${API_BASE_URL}/api/contracts/${contractId}/generate-email`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -535,7 +537,7 @@ function EmailGeneratorView({ contractId, clauses }: { contractId: string, claus
             <Button variant="outline" onClick={handleCopy} disabled={!emailDraft} className="border-zinc-800 bg-zinc-950 hover:bg-zinc-800 text-zinc-300 w-28">
               {isCopied ? "Copied!" : "Copy Email"}
             </Button>
-            <Button variant="outline" onClick={() => window.open('http://localhost:8000/api/contracts/' + contractId + '/export/email')} disabled={!emailDraft} className="border-zinc-800 bg-zinc-950 hover:bg-zinc-800 text-zinc-300">
+            <Button variant="outline" onClick={() => window.open(`${API_BASE_URL}/api/contracts/${contractId}/export/email`)} disabled={!emailDraft} className="border-zinc-800 bg-zinc-950 hover:bg-zinc-800 text-zinc-300">
               Download as .docx
             </Button>
           </div>

@@ -21,8 +21,9 @@ export function useAgentStream(contractId: string | null, initialClauses: Clause
     setIsStreaming(true);
     setClauses(initialClauses); // Set initial pending clauses
 
-
-    const eventSource = new EventSource(`http://localhost:8000/api/contracts/${contractId}/stream`);
+    // Use environment variable for cloud deployment, fallback to localhost
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const eventSource = new EventSource(`${API_BASE_URL}/api/contracts/${contractId}/stream`);
 
     eventSource.onmessage = (event) => {
       try {

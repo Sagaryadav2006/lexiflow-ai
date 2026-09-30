@@ -7,6 +7,8 @@ import { useToast } from '../hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, CheckCircle2, Bot, ArrowRight, ChevronLeft, ChevronRight, ShieldAlert, ShieldCheck, Copy, Check } from 'lucide-react';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 interface DocumentPaneProps {
   clauses: Clause[];
   currentIndex: number;
@@ -51,7 +53,7 @@ export function DocumentPane({ clauses, currentIndex, setCurrentIndex, onCommitS
     if (!onCommitSuccess || !activeClause.amended_text) return;
     setIsCommitting(true);
     try {
-      const response = await fetch(`http://localhost:8000/api/clauses/${activeClause.clause_id}/commit`, {
+      const response = await fetch(`${API_BASE_URL}/api/clauses/${activeClause.clause_id}/commit`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amended_text: activeClause.amended_text })
