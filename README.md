@@ -6,7 +6,7 @@ LexiFlow AI is an enterprise-grade, full-stack application designed to automate 
 
 🚀 Live Demo
 
-Frontend (Vercel): lexiflow-ai-sagar.vercel.app (Replace with your actual Vercel link)
+Frontend (Vercel): https://lexiflow-ai-rouge.vercel.app/
 
 Backend API (Render): Cloud-hosted FastAPI service with Server-Sent Events (SSE).
 
