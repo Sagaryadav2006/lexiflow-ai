@@ -114,6 +114,9 @@ p {
 }
 
 .diff-del {
+  display: inline-block;
+  line-height: 2.2;
+  margin-bottom: 4px;
   background-color: #fee2e2;
   color: #991b1b;
   text-decoration: line-through;
@@ -124,6 +127,9 @@ p {
 }
 
 .diff-ins {
+  display: inline-block;
+  line-height: 2.2;
+  margin-bottom: 4px;
   background-color: #d1fae5;
   color: #065f46;
   border-bottom: 2px solid #059669;

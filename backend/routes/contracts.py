@@ -367,6 +367,7 @@ async def stream_contract_review(
 
 class ChatRequest(BaseModel):
     message: str
+    current_clause_id: Optional[str] = None
 
 
 class EmailRequest(BaseModel):
@@ -387,6 +388,30 @@ async def chat_with_contract(contract_id: str, request: ChatRequest):
         cursor = clauses_collection.find({"contract_id": contract_oid}).sort("clause_index", 1)
         clauses = await cursor.to_list(length=None)
 
+        # Contextual active clause lookup
+        active_clause_text = ""
+        if request.current_clause_id:
+            try:
+                c_doc = await clauses_collection.find_one({
+                    "contract_id": contract_oid,
+                    "_id": ObjectId(request.current_clause_id)
+                })
+            except Exception:
+                c_doc = None
+
+            if not c_doc:
+                try:
+                    idx = int(request.current_clause_id)
+                    c_doc = await clauses_collection.find_one({
+                        "contract_id": contract_oid,
+                        "clause_index": idx
+                    })
+                except Exception:
+                    c_doc = None
+
+            if c_doc:
+                active_clause_text = c_doc.get("masked_text", c_doc.get("original_text", ""))
+
         full_text = "\n\n".join([clause.get("masked_text", clause.get("original_text", "")) for clause in clauses])
         # Safe context window cap for very large PDFs/DOCXs
         if len(full_text) > 18000:
@@ -394,15 +419,36 @@ async def chat_with_contract(contract_id: str, request: ChatRequest):
 
         user_message_masked, _ = mask_pii(request.message)
 
-        prompt = f"""
-You are a Senior Corporate Legal Counsel and Legal Advisor.
-You have two distinct operational modes:
-1. CONTRACT-SPECIFIC MODE: When asked about the uploaded document, reference specific clauses, audit findings, and risk scores. Explain rights and liabilities clearly.
-2. GENERAL LAW & REAL-WORLD ADVISORY MODE: If the user asks about any law, legal doctrine, statutory rule, compliance standard, or hypothetical scenario—even if completely unrelated to the contract—you MUST answer thoroughly and authoritatively in plain English for a non-lawyer.
-MANDATORY REQUIREMENT FOR ALL LEGAL EXPLANATIONS:
-Whenever you explain a legal rule, doctrine, or clause type, you MUST conclude with a concrete 'Real-World Scenario' header. In this scenario, walk through a realistic story (e.g., 'Imagine Company A contracts Developer B...') illustrating exactly how this rule is applied, contested, or enforced in practice.
-CRITICAL FORMATTING RULE: Do NOT generate Markdown tables under any circumstances. You must format all comparisons, features, or structured data using vertical bulleted lists.
+        role = contract.get("role", "Buyer")
+        jurisdiction = contract.get("jurisdiction", "California")
 
+        active_clause_context = ""
+        if active_clause_text:
+            active_clause_context = f"""
+Currently Focused Active Clause (Clause ID: {request.current_clause_id}):
+{active_clause_text}
+"""
+
+        prompt = f"""
+You are the LexiFlow AI Legal Copilot, a Senior Corporate Legal Counsel and Advisor.
+CLIENT ROLE: {role.upper()}
+GOVERNING JURISDICTION: {jurisdiction}
+
+STRICT ZERO-HALLUCINATION & GROUNDING GUARDRAILS:
+1. STRICT GROUNDING: You must ONLY answer chat questions, assess risk, or suggest contract modifications based strictly on the provided `original_text` and verified statutory law for the selected jurisdiction ({jurisdiction}).
+2. ZERO HALLUCINATION DIRECTIVE:
+CRITICAL DIRECTIVE: Do not invent, hallucinate, or assume contract clauses, dates, financial metrics, or liabilities that are not explicitly present in the source text. If a user asks about something not in the contract, you MUST reply with 'Information not present in the current contract clause.'
+3. AUTHORITATIVE SOURCES & JURISDICTION GUARDRAILS: Strictly align all legal guidance with authoritative statutory guardrails:
+   - India: Under Section 27 of the Indian Contract Act, 1872, agreements in restraint of trade, profession, or business are strictly void. Post-termination obligations must be strictly limited to data confidentiality under the Digital Personal Data Protection (DPDP) Act, 2023.
+   - California: Under Cal. Bus. & Prof. Code § 16600, non-compete agreements are void as a matter of public policy.
+   - Delaware / New York: Balance commercial reasonableness, mutual remedies, and standard indemnification limits.
+
+OPERATIONAL GUIDELINES:
+- When asked about the contract or specific provisions, reference the relevant clause text, audit findings, and risk exposure.
+- If an active clause is provided below, prioritize answering in the direct context of that active clause.
+- If the user asks about general statutory principles or doctrines under the specified jurisdiction, explain them clearly in plain English and conclude with a concrete 'Real-World Scenario' header illustrating practical application.
+- CRITICAL FORMATTING RULE: Do NOT generate Markdown tables under any circumstances. You must format all comparisons, features, or structured data using vertical bulleted lists.
+{active_clause_context}
 Contract Text:
 {full_text}
 

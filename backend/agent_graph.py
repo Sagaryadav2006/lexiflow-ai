@@ -69,15 +69,20 @@ PERSPECTIVE: You represent the BUYER / CLIENT / COMMISSION.
 """
 
     prompt = f"""
-STRICT ANTI-HALLUCINATION & CLAUSE-ISOLATION POLICY:
-1. SINGLE-CLAUSE SCOPE: You are analyzing ONE isolated clause from a larger multi-clause contract. Evaluate ONLY the legal risks present in the text of THIS specific clause.
-2. DO NOT PENALIZE FOR OTHER SECTIONS: NEVER flag a clause for missing unrelated contract sections (e.g., if you are analyzing '1. Parties' or '1. DUTIES', do NOT flag it for lacking Confidentiality, IP Ownership, Termination, or Governing Law).
-3. SAFE CLAUSE RULE (SCORE 0 TO 3): Boilerplate preamble, party identification, standard duties, term dates, equal employment opportunity, safety compliance, or benign administrative clauses MUST receive a `risk_score` between 0 and 2 and an EMPTY `prosecutor_flags` list (`[]`).
-4. FACTUAL & VERIFIED GROUNDING ONLY: Never fabricate facts, dollar amounts, or statutory citations. Base all analysis strictly on the provided clause text.
+STRICT ZERO-HALLUCINATION & GROUNDING GUARDRAILS:
+1. STRICT GROUNDING: You must ONLY flag issues and assess risk based strictly on the provided `original_text` and verified statutory law for the selected jurisdiction ({jurisdiction}).
+2. ZERO HALLUCINATION DIRECTIVE:
+CRITICAL DIRECTIVE: Do not invent, hallucinate, or assume contract clauses, dates, financial metrics, or liabilities that are not explicitly present in the source text. If a user asks about something not in the contract, you MUST reply with 'Information not present in the current contract clause.'
+3. AUTHORITATIVE SOURCES & GUARDRAILS: Strictly align all analysis with verified statutory law and deterministic legal guardrails before generating the final output:
+   - India: Under Section 27 of the Indian Contract Act, 1872, all agreements in restraint of trade, profession, or business are strictly void ab initio. Data covenants must comply with the Digital Personal Data Protection (DPDP) Act 2023. Non-competes MUST receive risk_score 10.
+   - California: Under Cal. Bus. & Prof. Code § 16600, non-competes are void ab initio and MUST receive high risk.
+   - Delaware / New York: Balance commercial reasonableness and bilateral remedies.
+4. SINGLE-CLAUSE SCOPE: You are analyzing ONE isolated clause from a larger multi-clause contract. Evaluate ONLY the legal risks present in the text of THIS specific clause.
+5. DO NOT PENALIZE FOR OTHER SECTIONS: NEVER flag a clause for missing unrelated contract sections (e.g., if you are analyzing '1. Parties' or '1. DUTIES', do NOT flag it for lacking Confidentiality, IP Ownership, Termination, or Governing Law).
+6. SAFE CLAUSE RULE (SCORE 0 TO 3): Boilerplate preamble, party identification, standard duties, term dates, equal employment opportunity, safety compliance, or benign administrative clauses MUST receive a `risk_score` between 0 and 2 and an EMPTY `prosecutor_flags` list (`[]`).
 
 {role_perspective}
 GOVERNING JURISDICTION: {jurisdiction}
-- California Law Note: If jurisdiction is California, non-compete clauses are strictly void under Cal. Bus. & Prof. Code § 16600 and MUST be flagged with high risk.
 
 You are a strict corporate legal auditor reviewing this clause on behalf of the {role.upper()}. Flag clauses that impose disproportionate legal or commercial risk against the {role.upper()} with an appropriate `risk_score` (between 7 and 10 for high/critical risks).
 
@@ -102,17 +107,20 @@ def defender_node(state: ClauseReviewState):
     jurisdiction = state.get("jurisdiction", "California")
 
     prompt = f"""
-STRICT ANTI-HALLUCINATION & CLAUSE-ISOLATION POLICY:
-1. SINGLE-CLAUSE SCOPE: Rewrite ONLY the current clause (keeping the same clause number and topic) to cure the identified risks.
-2. NO HALLUCINATED CLAUSES: NEVER append or invent additional numbered sections that were not in the original clause text.
-3. NO INLINE DICTIONARY BRACKETS: Write clean, natural legal prose in `amended_text`.
+STRICT ZERO-HALLUCINATION & GROUNDING GUARDRAILS:
+1. STRICT GROUNDING: Draft redlines and revisions based strictly on the provided `original_text` and verified statutory law for the selected jurisdiction ({jurisdiction}).
+2. ZERO HALLUCINATION DIRECTIVE:
+CRITICAL DIRECTIVE: Do not invent, hallucinate, or assume contract clauses, dates, financial metrics, or liabilities that are not explicitly present in the source text. If a user asks about something not in the contract, you MUST reply with 'Information not present in the current contract clause.'
+3. AUTHORITATIVE SOURCES & GUARDRAILS: Strictly align all outputs with deterministic legal guardrails:
+   - India: Under Section 27 of the Indian Contract Act, 1872, non-compete agreements are strictly void; post-termination obligations must be strictly limited to data confidentiality under the Digital Personal Data Protection (DPDP) Act, 2023.
+   - California: Under Cal. Bus. & Prof. Code § 16600, non-compete clauses are void as a matter of public policy; strike non-compete restrictions entirely and preserve only legitimate trade secret protections.
+   - Delaware / New York: Ensure balanced commercial enforceability, mutual remedies, and standard indemnification limits.
+4. SINGLE-CLAUSE SCOPE: Rewrite ONLY the current clause (keeping the same clause number and topic) to cure the identified risks.
+5. NO HALLUCINATED CLAUSES: NEVER append or invent additional numbered sections that were not in the original clause text.
+6. NO INLINE DICTIONARY BRACKETS: Write clean, natural legal prose in `amended_text`.
 
 CLIENT ROLE: {role.upper()}
 JURISDICTION: {jurisdiction}
-- Ensure that all redlines strictly comply with local state laws for {jurisdiction}.
-- If jurisdiction is California: non-compete clauses are void as a matter of public policy (Cal. Bus. & Prof. Code § 16600); strike any non-compete restrictions entirely and preserve only legitimate trade secret protections.
-- If jurisdiction is Delaware or New York: ensure balanced commercial enforceability, mutual remedies, and standard indemnification limits.
-- Draft redlines that protect the legitimate business interests of the {role.upper()}.
 
 Rewrite the following contract clause to resolve these identified risks from the perspective of the {role}:
 {', '.join(flags)}
@@ -150,11 +158,12 @@ def check_deterministic_guardrails(clause_text: str, jurisdiction: str = "", rol
     """
     Deterministic legal guardrail engine covering both the 5-clause contractor agreements
     and multi-page commercial/government contracts (e.g. SampleContract-Shuttle.pdf).
-    Includes California statutory non-compete voidance and role-aware risk posture.
+    Includes California & India statutory non-compete voidance and role-aware risk posture.
     """
     text_lower = clause_text.lower()
     jurisdiction_clean = (jurisdiction or "").strip().lower()
     is_california = "california" in jurisdiction_clean or jurisdiction_clean == "ca"
+    is_india = "india" in jurisdiction_clean or jurisdiction_clean == "in"
     is_seller = role.strip().lower() == "seller"
 
     # Identify non-compete or restraint of trade language
@@ -169,7 +178,27 @@ def check_deterministic_guardrails(clause_text: str, jurisdiction: str = "", rol
         or "known universe" in text_lower
     )
 
-    # 0. California Non-Compete Statutory Guardrail (Cal. Bus. & Prof. Code § 16600)
+    # 0A. India Non-Compete Statutory Guardrail (Section 27 of Indian Contract Act, 1872 & DPDP Act 2023)
+    if is_india and is_non_compete:
+        return {
+            "risk_score": 10,
+            "risk_analysis": [
+                "CRITICAL VIOLATION - Void Under Indian Law: Under Section 27 of the Indian Contract Act, 1872, agreements in restraint of trade or lawful profession are strictly void."
+            ],
+            "violations": [
+                "Strict statutory prohibition under Section 27 of the Indian Contract Act, 1872",
+                "Agreements in restraint of trade, profession, or business are void ab initio",
+                "Digital Personal Data Protection (DPDP) Act 2023: Narrow post-termination covenants strictly to data privacy and confidential information"
+            ],
+            "amended_text": (
+                "3. Restrictive Covenants and Confidentiality (Compliance with Indian Law). Pursuant to Section 27 of the Indian "
+                "Contract Act, 1872, Contractor is not subject to any post-termination non-compete restraint. Contractor's "
+                "post-termination obligations shall be strictly limited to maintaining the confidentiality and security of digital "
+                "personal data and proprietary information in accordance with the DPDP Act 2023 (Digital Personal Data Protection Act, 2023)."
+            )
+        }
+
+    # 0B. California Non-Compete Statutory Guardrail (Cal. Bus. & Prof. Code § 16600)
     # Strictly void as a matter of California public policy
     if is_california and is_non_compete:
         return {

@@ -25,6 +25,18 @@ def test_california_non_compete_guardrail():
     print("[PASS] Delaware non-compete flagged with general commercial reasonableness rule.")
 
 
+def test_india_non_compete_guardrail():
+    print("--- Testing India Non-Compete Guardrail ---")
+    india_clause = "3. Non-Compete. Contractor agrees not to compete or engage in any business within India for 2 years following termination."
+
+    result_in = check_deterministic_guardrails(india_clause, jurisdiction="India", role="Buyer")
+    assert result_in is not None, "Guardrail must trigger for India non-compete"
+    assert result_in["risk_score"] == 10, f"Expected risk_score 10, got {result_in['risk_score']}"
+    assert "Section 27 of the Indian Contract Act, 1872" in result_in["risk_analysis"][0]
+    assert "DPDP Act 2023" in result_in["amended_text"] or "Digital Personal Data Protection Act, 2023" in result_in["amended_text"]
+    print("[PASS] India non-compete flagged with score 10, Section 27 Contract Act citation, and DPDP Act 2023 amendment.")
+
+
 def test_role_aware_liquidated_damages():
     print("--- Testing Role-Aware Liquidated Damages ---")
     ld_clause = "2. Liquidated Damages. Contractor shall pay liquidated damages of $500,000 for any project delay."
@@ -118,6 +130,7 @@ def test_fastapi_routes():
 
 if __name__ == "__main__":
     test_california_non_compete_guardrail()
+    test_india_non_compete_guardrail()
     test_role_aware_liquidated_damages()
     test_docx_export_formatting()
     test_fastapi_routes()
