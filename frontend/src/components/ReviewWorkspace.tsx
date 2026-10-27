@@ -393,12 +393,15 @@ export function ReviewWorkspace() {
   const highModPct = totalClausesCount > 0 ? ((highCount + moderateCount) / totalClausesCount) * 100 : 0;
   const safePct = totalClausesCount > 0 ? (safeCount / totalClausesCount) * 100 : 100;
 
-  // Top major vulnerabilities for Executive Summary
+  // Top major vulnerabilities for Executive Summary (maps all critical and high risk clauses)
   const topVulnerabilities = useMemo(() => {
+    const highRisk = [...clauses].filter(c => c.risk_score >= 5.0 || c.risk_category === 'Critical' || c.risk_category === 'High');
+    if (highRisk.length > 0) {
+      return highRisk.sort((a, b) => b.risk_score - a.risk_score);
+    }
     return [...clauses]
       .filter(c => c.risk_score >= 4.0)
-      .sort((a, b) => b.risk_score - a.risk_score)
-      .slice(0, 2);
+      .sort((a, b) => b.risk_score - a.risk_score);
   }, [clauses]);
 
   // Current active clause
@@ -495,20 +498,28 @@ export function ReviewWorkspace() {
 
   // Pushback Email Draft by Tone
   const emailDraftBody = useMemo(() => {
-    const highRisk1 = criticalClauses[0] || highClauses[0] || clauses[0];
-    const highRisk2 = criticalClauses[1] || highClauses[1] || clauses[1];
+    const flagged = clauses.filter(c => c.risk_score >= 5.0 || c.risk_category === 'Critical' || c.risk_category === 'High');
+    const targetClauses = flagged.length > 0 ? flagged : (clauses.length > 0 ? clauses.slice(0, 2) : []);
 
-    const sec1Text = highRisk1 ? `Section ${highRisk1.clause_index} (${highRisk1.title})` : "Section 14 (Indemnification)";
-    const sec2Text = highRisk2 ? `Section ${highRisk2.clause_index} (${highRisk2.title})` : "Section 15 (Limitation of Liability)";
+    const clausesList = targetClauses.map((c, i) => {
+      const secTitle = `Section ${c.clause_index} (${c.title})`;
+      const issue = c.analysis?.[0] || "Unilateral imbalance compromising liability defenses.";
+      const redline = c.amended_text ? `Proposed Resolution: "${c.amended_text.slice(0, 160)}..."` : "Proposed Resolution: Bilateral mutuality and balanced liability cap.";
+      return `${i + 1}. ${secTitle.toUpperCase()} — UNILATERAL IMBALANCE:
+   Issue: ${issue}
+   ${redline}`;
+    }).join("\n\n");
+
+    const secSummary = targetClauses.map(c => `Section ${c.clause_index}`).join(", ");
 
     if (emailTone === "Collaborative") {
       return `Dear Opposing Counsel,
 
 Thank you for providing the initial draft of the ${contractName}. Our client is excited about this partnership and eager to conclude negotiations smoothly.
 
-We have proposed modest adjustments to ${sec1Text} and ${sec2Text} to ensure balanced risk allocation in line with standard commercial practices under ${jurisdiction} law:
-• Symmetrical indemnification covenants for direct claims.
-• A 12-month aggregate liability cap of $250,000 replacing asymmetric limitations.
+We have reviewed the contract and require targeted adjustments to ${secSummary || "the agreement"} to ensure balanced risk allocation in line with standard commercial practices under ${jurisdiction} law:
+
+${clausesList}
 
 Please find our native OpenXML redline attached. We look forward to your thoughts and would welcome a brief sync this week.
 
@@ -523,8 +534,8 @@ Corporate Legal & Risk Operations Group`;
 Our zero-trust agentic audit of the draft ${contractName} has flagged non-negotiable legal exposures that directly contradict our enterprise risk mandate under ${jurisdiction} law.
 
 Specifically, we cannot execute under the following terms:
-1. UNILATERAL INDEMNITY (${sec1Text}): Uncapped ${role.toLowerCase()} indemnification with zero vendor reciprocity violates baseline governance requirements. We mandate reciprocal, direct-claim defense limited strictly by the contractual cap.
-2. DISPROPORTIONATE LIABILITY ALLOCATION (${sec2Text}): Unhedged customer exposure is untenable under ${jurisdiction} commercial standards. The liability ceiling must reflect twelve (12) months of contract value ($250,000).
+
+${clausesList}
 
 Our client’s execution is contingent upon incorporating the attached OpenXML (.DOCX) redlines without dilution. Please advise by 5:00 PM EST Friday.
 
@@ -536,20 +547,16 @@ Corporate Legal & Risk Operations Group`;
     // Default: Firm
     return `Dear Opposing Counsel,
 
-We have completed our audit of the draft ${contractName} under ${jurisdiction} law. While our client is eager to finalize this partnership, we cannot accept ${sec1Text} and ${sec2Text} in their current asymmetric framing:
+We have completed our audit of the draft ${contractName} under ${jurisdiction} law. While our client is eager to finalize this partnership, we cannot accept ${secSummary || "the agreement"} in its current asymmetric framing:
 
-1. ${sec1Text.toUpperCase()} UNILATERALITY:
-The draft obligates ${role} to indemnify Provider without monetary ceiling for broad third-party claims and consequential damages, while providing zero reciprocal indemnity. Our redline introduces standard ${jurisdiction} bilateral parity, strictly capping indemnity within the aggregate liability mechanism.
-
-2. ${sec2Text.toUpperCase()} LIABILITY MECHANISM:
-Limiting Provider's aggregate exposure while holding ${role.toLowerCase()} uncapped creates an untenable imbalance. We have revised this to the standard twelve (12) months of aggregate contract fees paid ($250,000), with customary exclusions for gross negligence, confidentiality, and data breach covenants.
+${clausesList}
 
 Please find our native OpenXML (.DOCX) redline attached reflecting these required adjustments. We are available for an expedited counsel conferral this Thursday at 2:00 PM EST.
 
 Sincerely,
 Office of the General Counsel
 Corporate Legal & Risk Operations Group`;
-  }, [emailTone, contractName, role, jurisdiction, criticalClauses, highClauses, clauses]);
+  }, [emailTone, contractName, role, jurisdiction, clauses]);
 
   const handleSendEmail = () => {
     const subject = encodeURIComponent("Re: Master Cloud Services Agreement - Redlines");
@@ -881,13 +888,13 @@ Corporate Legal & Risk Operations Group`;
                 <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${safePct}%` }} title={`Safe Conforming: ${safeCount} clauses`}></div>
               </div>
 
-              {/* Major Vulnerability Highlights Strip */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              {/* Major Vulnerability Highlights Strip (Horizontal Carousel) */}
+              <div className="flex overflow-x-auto gap-4 pb-4 snap-x w-full [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden pt-2">
                 {topVulnerabilities.length > 0 ? (
                   topVulnerabilities.map((vuln) => (
                     <div
                       key={vuln.clause_id}
-                      className={vuln.risk_score >= 8.0 ? "bg-red-50/70 border border-red-200 rounded-xl p-4 flex items-start space-x-3.5" : "bg-amber-50/70 border border-amber-200 rounded-xl p-4 flex items-start space-x-3.5"}
+                      className={vuln.risk_score >= 8.0 ? "min-w-[320px] snap-center shrink-0 bg-red-50/70 border border-red-200 rounded-xl p-4 flex items-start space-x-3.5" : "min-w-[320px] snap-center shrink-0 bg-amber-50/70 border border-amber-200 rounded-xl p-4 flex items-start space-x-3.5"}
                     >
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${vuln.risk_score >= 8.0 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                         {vuln.risk_score >= 8.0 ? <AlertTriangle className="w-4 h-4" /> : <ShieldX className="w-4 h-4" />}
@@ -918,7 +925,7 @@ Corporate Legal & Risk Operations Group`;
                     </div>
                   ))
                 ) : (
-                  <div className="col-span-2 bg-emerald-50/70 border border-emerald-200 rounded-xl p-5 flex items-center space-x-3.5">
+                  <div className="w-full bg-emerald-50/70 border border-emerald-200 rounded-xl p-5 flex items-center space-x-3.5">
                     <ShieldCheck className="w-6 h-6 text-emerald-600 shrink-0" />
                     <div>
                       <h4 className="text-xs font-bold text-emerald-950">Zero Critical Exposures Detected</h4>

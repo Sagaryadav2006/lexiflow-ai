@@ -513,7 +513,9 @@ Total Analyzed Clauses: {len(clauses)}
 CRITICAL DIRECTIVES:
 - You MAY summarize, analyze, or creatively reformat the contract text (e.g., translating legal jargon into IF/ELSE logic, bullet points, or risk matrixes) if the user asks for it.
 - You MAY cross-reference other clauses in the contract to answer questions like 'What are all the harmful clauses?'.
-- You MUST NOT invent fake laws, fake monetary values, or fake clauses that do not exist in the provided context. If asked about outside information, politely decline."""
+- You MUST NOT invent fake laws, fake monetary values, or fake clauses that do not exist in the provided context. If asked about outside information, politely decline.
+- DO NOT use Markdown tables under any circumstances. 
+- If you need to present structured data, comparisons, or multiple variables, you MUST use clean bulleted lists or numbered lists with bold text for emphasis."""
 
         prompt = f"""{system_directive}
 
@@ -558,18 +560,29 @@ async def generate_pushback_email(contract_id: str, request: EmailRequest = None
         if request and request.clauses is not None:
             flagged_clauses = [
                 c for c in request.clauses
-                if c.get("risk_score", 0) >= 4 or c.get("amended_text", "") != ""
+                if c.get("risk_score", 0) >= 7
             ]
+            if not flagged_clauses:
+                flagged_clauses = [
+                    c for c in request.clauses
+                    if c.get("risk_score", 0) >= 4 or c.get("amended_text", "") != ""
+                ]
         else:
             cursor = clauses_collection.find({
                 "contract_id": ObjectId(contract_id),
-                "$or": [
-                    {"risk_score": {"$gte": 4}},
-                    {"amended_text": {"$exists": True, "$ne": ""}}
-                ]
+                "risk_score": {"$gte": 7}
             }).sort("clause_index", 1)
 
             flagged_clauses = await cursor.to_list(length=None)
+            if not flagged_clauses:
+                cursor_fallback = clauses_collection.find({
+                    "contract_id": ObjectId(contract_id),
+                    "$or": [
+                        {"risk_score": {"$gte": 4}},
+                        {"amended_text": {"$exists": True, "$ne": ""}}
+                    ]
+                }).sort("clause_index", 1)
+                flagged_clauses = await cursor_fallback.to_list(length=None)
 
         if not flagged_clauses:
             return {"email": "No high-risk clauses found. The contract looks good to sign!"}
@@ -593,6 +606,7 @@ We have reviewed the contract and require the following amendments to resolve id
 {clauses_summary}
 
 Format each requested change clearly with numbered headers and concise bullet points. Do not use Markdown tables.
+You must address ALL Critical and High-Risk clauses provided in the context. Do not stop at just two. Create a numbered list in the email body detailing the unilateral imbalance and proposed resolution for EVERY flagged clause.
 """
         try:
             response = await llm.ainvoke(prompt)
@@ -600,9 +614,9 @@ Format each requested change clearly with numbered headers and concise bullet po
         except Exception:
             # Deterministic fallback email if Groq rate-limits on large contracts
             bullet_points = "\n\n".join([
-                f"**{i}. {c.get('original_text', 'Clause')[:45].strip()}...**\n"
-                f"* **Issue:** {(c.get('prosecutor_flags') or ['Unbalanced risk allocation'])[0]}\n"
-                f"* **Proposed Amendment:** {c.get('amended_text', 'See redlined attachment.')}"
+                f"**{i}. {c.get('original_text', 'Clause')[:55].strip()}...**\n"
+                f"* **Unilateral Imbalance:** {(c.get('prosecutor_flags') or ['Unbalanced risk allocation'])[0]}\n"
+                f"* **Proposed Resolution:** {c.get('amended_text', 'See redlined attachment.')}"
                 for i, c in enumerate(flagged_clauses, 1)
             ])
             email_draft = (
