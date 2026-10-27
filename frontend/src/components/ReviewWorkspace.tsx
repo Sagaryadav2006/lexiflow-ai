@@ -227,7 +227,7 @@ export function ReviewWorkspace() {
 
   // Resolution & Pushback Memo Tone
   const [emailTone, setEmailTone] = useState<"Collaborative" | "Firm" | "Unyielding">("Firm");
-  const [exportFormat, setExportFormat] = useState<"docx" | "pdf" | "json">("docx");
+  const [exportFormat, setExportFormat] = useState<'docx' | 'pdf' | 'json'>('docx');
   const [copiedToast, setCopiedToast] = useState<string>("");
   const [exportToast, setExportToast] = useState<boolean>(false);
 
@@ -438,8 +438,8 @@ export function ReviewWorkspace() {
     );
   };
 
-  // Wire export endpoint: hits FastAPI route GET /export/docx/{contract_id}
-  const handleExport = () => {
+  // Wire export endpoint: hits FastAPI route GET /api/contracts/{contractId}/export?format={exportFormat}
+  const handleDownload = () => {
     if (!contractId) {
       setShowUploadModal(true);
       setCopiedToast("Please ingest a contract first");
@@ -447,9 +447,10 @@ export function ReviewWorkspace() {
       return;
     }
     setExportToast(true);
-    window.open(`${API_BASE_URL}/export/docx/${contractId}`, '_blank');
+    window.open(`http://localhost:8000/api/contracts/${contractId}/export?format=${exportFormat}`);
     setTimeout(() => setExportToast(false), 4500);
   };
+  const handleExport = handleDownload;
 
   // Contextual Chatbot Message Dispatcher
   const handleSendMessage = async (e?: React.FormEvent) => {
@@ -1789,11 +1790,11 @@ Corporate Legal & Risk Operations Group`;
 
                 {/* Primary Download Button */}
                 <button
-                  onClick={handleExport}
+                  onClick={handleDownload}
                   className="w-full py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-xl text-xs font-bold tracking-wide transition shadow-lg ring-1 ring-emerald-400/50 flex items-center justify-center space-x-2"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Download Native Redlined Document (.DOCX)</span>
+                  <span>{`Download Native Package (.${exportFormat.toUpperCase()})`}</span>
                 </button>
               </div>
 

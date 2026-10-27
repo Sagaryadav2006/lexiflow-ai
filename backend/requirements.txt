@@ -19,3 +19,4 @@ python-docx
 pypdf
 PyMuPDF
 pydantic
+fpdf2

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Form, Query, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse, Response
 import json
 from typing import List, Optional
 from enum import Enum
@@ -12,6 +12,7 @@ from pydantic import BaseModel
 import io
 import re
 import docx
+from fpdf import FPDF
 
 class RoleEnum(str, Enum):
     BUYER = "Buyer"
@@ -696,12 +697,12 @@ async def export_pushback_email(contract_id: str):
     )
 
 
-@router.get("/export/docx/{contract_id}")
+@router.get("/{contract_id}/export")
 @router.get("/{contract_id}/export/docx")
-async def export_contract_docx(contract_id: str):
+@router.get("/export/docx/{contract_id}")
+async def export_contract_docx(contract_id: str, format: str = "docx"):
     """
-    Exports a native Word (.docx) document with visual redlines (strikethrough/red, underline/green)
-    sorted by clause_index, unmasking PII if mapping exists.
+    Multi-format export endpoint (.DOCX, .PDF, .JSON) for contract audit packages.
     """
     try:
         contract_oid = ObjectId(contract_id)
@@ -712,16 +713,90 @@ async def export_contract_docx(contract_id: str):
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
 
-    cursor = clauses_collection.find({"contract_id": contract_oid}).sort("clause_index", 1)
-    clauses = await cursor.to_list(length=None)
+    if format == "json":
+        contract_doc = dict(contract)
+        if "_id" in contract_doc:
+            contract_doc["_id"] = str(contract_doc["_id"])
+        cursor = clauses_collection.find({"contract_id": contract_oid}).sort("clause_index", 1)
+        clauses = await cursor.to_list(length=None)
+        if clauses:
+            for c in clauses:
+                if "_id" in c:
+                    c["_id"] = str(c["_id"])
+                if "contract_id" in c:
+                    c["contract_id"] = str(c["contract_id"])
+            contract_doc["clauses"] = clauses
 
-    buffer = build_contract_docx(contract, clauses)
+        payload = json.loads(json.dumps(contract_doc, default=str))
+        return JSONResponse(
+            content=payload,
+            headers={"Content-Disposition": 'attachment; filename="Contract_Audit_Payload.json"'}
+        )
 
-    clean_name = re.sub(r'\.(pdf|docx)$', '', contract.get('filename', 'Contract'), flags=re.IGNORECASE)
-    filename = f"{clean_name}_Redlined.docx"
+    if format == "pdf":
+        cursor = clauses_collection.find({"contract_id": contract_oid}).sort("clause_index", 1)
+        clauses = await cursor.to_list(length=None)
 
-    return StreamingResponse(
-        buffer,
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
-    )
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_auto_page_break(auto=True, margin=15)
+
+        def sanitize_pdf_text(text: str) -> str:
+            if not text:
+                return ""
+            replacements = {
+                '\u2018': "'", '\u2019': "'", '\u201c': '"', '\u201d': '"',
+                '\u2013': '-', '\u2014': '--', '\u2026': '...', '\u00a0': ' ',
+                '§': 'Section '
+            }
+            for orig, rep in replacements.items():
+                text = text.replace(orig, rep)
+            return text.encode('latin-1', 'replace').decode('latin-1')
+
+        pdf.set_font("helvetica", "B", 18)
+        pdf.cell(0, 10, "Executive Counsel Brief", new_x="LMARGIN", new_y="NEXT", align="C")
+        pdf.ln(4)
+
+        clean_name = re.sub(r'\.(pdf|docx)$', '', contract.get('filename', 'Contract'), flags=re.IGNORECASE)
+        pdf.set_font("helvetica", "B", 12)
+        pdf.cell(0, 7, sanitize_pdf_text(f"Contract: {clean_name}"), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("helvetica", "", 10)
+        pdf.cell(0, 6, sanitize_pdf_text(f"Jurisdiction: {contract.get('jurisdiction', 'California')} | Stance: {contract.get('role', 'Buyer')}"), new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(5)
+
+        for idx, clause in enumerate(clauses, 1):
+            title = clause.get("title", f"Clause {clause.get('clause_index', idx)}")
+            risk_score = clause.get("risk_score", 0)
+            summary_items = clause.get("risk_analysis") or clause.get("prosecutor_flags") or []
+            if isinstance(summary_items, list) and summary_items:
+                summary_text = summary_items[0]
+            else:
+                summary_text = clause.get("original_text", "")[:180].strip()
+
+            pdf.set_font("helvetica", "B", 11)
+            pdf.cell(0, 7, sanitize_pdf_text(f"{idx}. {title} - Risk Score: {risk_score}/10"), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("helvetica", "", 10)
+            pdf.multi_cell(0, 5, sanitize_pdf_text(f"Summary: {summary_text}"))
+            pdf.ln(3)
+
+        pdf_bytes = bytes(pdf.output())
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'attachment; filename="Executive_Counsel_Brief.pdf"'}
+        )
+
+    elif format == "docx" or format is None:
+        cursor = clauses_collection.find({"contract_id": contract_oid}).sort("clause_index", 1)
+        clauses = await cursor.to_list(length=None)
+
+        buffer = build_contract_docx(contract, clauses)
+
+        clean_name = re.sub(r'\.(pdf|docx)$', '', contract.get('filename', 'Contract'), flags=re.IGNORECASE)
+        filename = f"{clean_name}_Redlined.docx"
+
+        return StreamingResponse(
+            buffer,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
