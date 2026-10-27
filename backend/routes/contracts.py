@@ -366,96 +366,171 @@ async def stream_contract_review(
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: Optional[str] = None
+    query: Optional[str] = None
     current_clause_id: Optional[str] = None
+    clause_index: Optional[int] = None
 
 
 class EmailRequest(BaseModel):
     clauses: Optional[List[dict]] = None
 
 
+@router.post("/copilot/chat")
 @router.post("/{contract_id}/chat")
-async def chat_with_contract(contract_id: str, request: ChatRequest):
+async def chat_with_contract(contract_id: str = "default", request: ChatRequest = None):
     try:
-        contract_oid = ObjectId(contract_id)
-        contract = await contracts_collection.find_one({"_id": contract_oid})
+        # Resolve user message
+        user_message_raw = ""
+        if request:
+            user_message_raw = (request.message or request.query or "").strip()
+        if not user_message_raw:
+            return {"reply": "Please provide a question or instruction regarding the contract."}
+
+        # 1. Resolve Contract Document from MongoDB
+        contract = None
+        contract_oid = None
+        if contract_id and contract_id not in ("default", "copilot"):
+            try:
+                contract_oid = ObjectId(contract_id)
+                contract = await contracts_collection.find_one({"_id": contract_oid})
+            except Exception:
+                contract = None
+
         if not contract:
-            raise HTTPException(status_code=404, detail="Contract not found")
+            # Fallback to the latest ingested contract
+            contract = await contracts_collection.find_one(sort=[("_id", -1)])
+            if contract:
+                contract_oid = contract["_id"]
+
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found in database.")
 
         chat_history = contract.get("chat_history", [])
         history_text = "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_history[-8:]])
 
+        # 2. Query MongoDB for all parsed clauses (Task 1: Context Expansion)
         cursor = clauses_collection.find({"contract_id": contract_oid}).sort("clause_index", 1)
         clauses = await cursor.to_list(length=None)
+        if not clauses:
+            cursor = clauses_collection.find().sort("clause_index", 1)
+            clauses = await cursor.to_list(length=None)
 
-        # Contextual active clause lookup
-        active_clause_text = ""
-        if request.current_clause_id:
+        # 3. Resolve Current Focused Clause
+        clause_id_req = request.current_clause_id if request else None
+        if not clause_id_req and request and request.clause_index is not None:
+            clause_id_req = str(request.clause_index)
+
+        current_clause = None
+        current_clause_id = clause_id_req or "1"
+
+        if clause_id_req:
             try:
-                c_doc = await clauses_collection.find_one({
+                current_clause = await clauses_collection.find_one({
                     "contract_id": contract_oid,
-                    "_id": ObjectId(request.current_clause_id)
+                    "_id": ObjectId(clause_id_req)
                 })
             except Exception:
-                c_doc = None
+                current_clause = None
 
-            if not c_doc:
+            if not current_clause:
                 try:
-                    idx = int(request.current_clause_id)
-                    c_doc = await clauses_collection.find_one({
+                    c_num = int(clause_id_req)
+                    current_clause = await clauses_collection.find_one({
                         "contract_id": contract_oid,
-                        "clause_index": idx
+                        "$or": [{"clause_index": c_num}, {"clause_index": c_num - 1}]
                     })
                 except Exception:
-                    c_doc = None
+                    current_clause = None
 
-            if c_doc:
-                active_clause_text = c_doc.get("masked_text", c_doc.get("original_text", ""))
+            if not current_clause:
+                current_clause = await clauses_collection.find_one({
+                    "contract_id": contract_oid,
+                    "clause_id": clause_id_req
+                })
 
-        full_text = "\n\n".join([clause.get("masked_text", clause.get("original_text", "")) for clause in clauses])
-        # Safe context window cap for very large PDFs/DOCXs
-        if len(full_text) > 18000:
-            full_text = full_text[:18000] + "\n...[Document truncated for context window]..."
+        if not current_clause and clauses:
+            current_clause = clauses[0]
 
-        user_message_masked, _ = mask_pii(request.message)
+        if current_clause:
+            c_idx = current_clause.get("clause_index", 0)
+            current_clause_id = str(c_idx if c_idx >= 1 else c_idx + 1)
+            c_title = current_clause.get("title", f"Clause {current_clause_id}")
+            c_text = current_clause.get("masked_text", current_clause.get("original_text", "")).strip()
+            c_risk = current_clause.get("risk_score", 0)
+            c_flags = current_clause.get("prosecutor_flags", [])
+            c_flags_str = "; ".join(c_flags) if c_flags else "None"
+            c_redline = current_clause.get("amended_text", current_clause.get("defender_redline", ""))
 
+            current_clause_context = f"""Clause #{current_clause_id}: {c_title}
+Risk Score: {c_risk}/10
+Identified Flags: {c_flags_str}
+Text:
+{c_text}"""
+            if c_redline:
+                current_clause_context += f"\nProposed Redline Revision:\n{c_redline}"
+        else:
+            current_clause_context = f"Clause #{current_clause_id} (No clause body available)"
+
+        # 4. Assemble Full Contract Context (Inventory Summary + All Clause Texts)
+        clause_inventory = []
+        clause_body_blocks = []
+
+        for c in clauses:
+            c_i = c.get("clause_index", 0)
+            disp_i = c_i if c_i >= 1 else c_i + 1
+            title = c.get("title", f"Clause {disp_i}")
+            risk = c.get("risk_score", 0)
+            flags = c.get("prosecutor_flags", [])
+            flags_str = "; ".join(flags) if flags else "None"
+            text = c.get("masked_text", c.get("original_text", "")).strip()
+
+            clause_inventory.append(
+                f"- Clause #{disp_i}: {title} | Risk Score: {risk}/10 | Flags: {flags_str}"
+            )
+            clause_body_blocks.append(
+                f"--- [Clause #{disp_i}: {title} | Risk: {risk}/10] ---\n{text}"
+            )
+
+        inventory_summary = "\n".join(clause_inventory) if clause_inventory else "No parsed clauses available."
+        full_text_combined = "\n\n".join(clause_body_blocks)
+        if len(full_text_combined) > 20000:
+            full_text_combined = full_text_combined[:20000] + "\n...[Additional clauses truncated for context limit]..."
+
+        full_contract_context = f"""[CLAUSE RISK & FLAGS INVENTORY]
+Total Analyzed Clauses: {len(clauses)}
+{inventory_summary}
+
+[FULL CONTRACT CLAUSES TEXT]
+{full_text_combined}"""
+
+        user_message_masked, _ = mask_pii(user_message_raw)
         role = contract.get("role", "Buyer")
         jurisdiction = contract.get("jurisdiction", "California")
 
-        active_clause_context = ""
-        if active_clause_text:
-            active_clause_context = f"""
-Currently Focused Active Clause (Clause ID: {request.current_clause_id}):
-{active_clause_text}
-"""
+        # 5. Smart Relaxed System Directive & Analytical Prompt (Task 2)
+        system_directive = f"""You are an elite Enterprise Legal Copilot. You have access to the full contract context, but the user is currently viewing Clause #{current_clause_id}. 
+CRITICAL DIRECTIVES:
+- You MAY summarize, analyze, or creatively reformat the contract text (e.g., translating legal jargon into IF/ELSE logic, bullet points, or risk matrixes) if the user asks for it.
+- You MAY cross-reference other clauses in the contract to answer questions like 'What are all the harmful clauses?'.
+- You MUST NOT invent fake laws, fake monetary values, or fake clauses that do not exist in the provided context. If asked about outside information, politely decline."""
 
-        prompt = f"""
-You are the LexiFlow AI Legal Copilot, a Senior Corporate Legal Counsel and Advisor.
-CLIENT ROLE: {role.upper()}
+        prompt = f"""{system_directive}
+
+CLIENT PERSPECTIVE: {role.upper()}
 GOVERNING JURISDICTION: {jurisdiction}
 
-STRICT ZERO-HALLUCINATION & GROUNDING GUARDRAILS:
-1. STRICT GROUNDING: You must ONLY answer chat questions, assess risk, or suggest contract modifications based strictly on the provided `original_text` and verified statutory law for the selected jurisdiction ({jurisdiction}).
-2. ZERO HALLUCINATION DIRECTIVE:
-CRITICAL DIRECTIVE: Do not invent, hallucinate, or assume contract clauses, dates, financial metrics, or liabilities that are not explicitly present in the source text. If a user asks about something not in the contract, you MUST reply with 'Information not present in the current contract clause.'
-3. AUTHORITATIVE SOURCES & JURISDICTION GUARDRAILS: Strictly align all legal guidance with authoritative statutory guardrails:
-   - India: Under Section 27 of the Indian Contract Act, 1872, agreements in restraint of trade, profession, or business are strictly void. Post-termination obligations must be strictly limited to data confidentiality under the Digital Personal Data Protection (DPDP) Act, 2023.
-   - California: Under Cal. Bus. & Prof. Code § 16600, non-compete agreements are void as a matter of public policy.
-   - Delaware / New York: Balance commercial reasonableness, mutual remedies, and standard indemnification limits.
+CURRENT FOCUSED CLAUSE:
+{current_clause_context}
 
-OPERATIONAL GUIDELINES:
-- When asked about the contract or specific provisions, reference the relevant clause text, audit findings, and risk exposure.
-- If an active clause is provided below, prioritize answering in the direct context of that active clause.
-- If the user asks about general statutory principles or doctrines under the specified jurisdiction, explain them clearly in plain English and conclude with a concrete 'Real-World Scenario' header illustrating practical application.
-- CRITICAL FORMATTING RULE: Do NOT generate Markdown tables under any circumstances. You must format all comparisons, features, or structured data using vertical bulleted lists.
-{active_clause_context}
-Contract Text:
-{full_text}
+FULL CONTRACT CONTEXT:
+{full_contract_context}
 
-Conversation History:
+CONVERSATION HISTORY:
 {history_text}
 
-User Question: {user_message_masked}
+USER QUESTION:
+{user_message_masked}
 """
         response = await llm.ainvoke(prompt)
 
@@ -464,10 +539,11 @@ User Question: {user_message_masked}
             {"role": "model", "content": response.content}
         ]
 
-        await contracts_collection.update_one(
-            {"_id": contract_oid},
-            {"$push": {"chat_history": {"$each": new_messages}}}
-        )
+        if contract_oid:
+            await contracts_collection.update_one(
+                {"_id": contract_oid},
+                {"$push": {"chat_history": {"$each": new_messages}}}
+            )
 
         return {"reply": response.content}
     except Exception as e:

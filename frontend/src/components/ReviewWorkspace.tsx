@@ -90,6 +90,15 @@ function extractTitleAndSection(text: string, index: number) {
   };
 }
 
+function formatChatMessage(text: string): string {
+  if (!text) return "";
+  const escaped = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return escaped.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+}
+
 function parseFinancialExposure(text: string, risk_score: number): { exposureStr: string; amount: number } {
   if (!text) return { exposureStr: "$0", amount: 0 };
   const matches = text.match(/\$([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?)/g);
@@ -542,21 +551,28 @@ Office of the General Counsel
 Corporate Legal & Risk Operations Group`;
   }, [emailTone, contractName, role, jurisdiction, criticalClauses, highClauses, clauses]);
 
+  const handleSendEmail = () => {
+    const subject = encodeURIComponent("Re: Master Cloud Services Agreement - Redlines");
+    const body = encodeURIComponent(emailDraftBody);
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${recipientEmail}&su=${subject}&body=${body}`;
+    window.open(gmailUrl, '_blank');
+  };
+
   return (
     <div className="flex flex-col h-full w-full bg-[#f8f7f4] text-slate-900 antialiased select-none overflow-hidden font-sans">
 
       {/* ========================================================================= */}
       {/* TOP NAVIGATION BAR WITH 3 DISTINCT TABS                                  */}
       {/* ========================================================================= */}
-      <header className="h-16 bg-[#0a0f1d] border-b border-slate-800 text-white flex items-center justify-between px-6 shrink-0 z-30 shadow-md">
+      <header className="h-16 bg-[#0a0f1d] border-b border-slate-800 text-white flex items-center justify-between px-4 lg:px-6 shrink-0 z-30 shadow-md overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden gap-3">
 
         {/* Left Brand, Document Title & Enclave Pill */}
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-amber-500 via-amber-400 to-amber-300 flex items-center justify-center text-slate-950 shadow-md ring-1 ring-amber-400/40">
+        <div className="flex items-center space-x-3 lg:space-x-4 shrink-0 min-w-0">
+          <div className="flex items-center space-x-2.5 shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-amber-500 via-amber-400 to-amber-300 flex items-center justify-center text-slate-950 shadow-md ring-1 ring-amber-400/40 shrink-0">
               <Scale className="w-4 h-4 stroke-[2.4]" />
             </div>
-            <div className="leading-tight">
+            <div className="leading-tight shrink-0">
               <div className="flex items-center space-x-2">
                 <span className="font-bold tracking-tight text-sm text-white">LexiFlow AI</span>
                 <span className="text-[9px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded bg-slate-800 text-amber-300 border border-slate-700">
@@ -569,52 +585,52 @@ Corporate Legal & Risk Operations Group`;
             </div>
           </div>
 
-          <div className="h-5 w-[1px] bg-slate-800 hidden md:block"></div>
+          <div className="h-5 w-[1px] bg-slate-800 hidden md:block shrink-0"></div>
 
           {/* Document Context Pill */}
-          <div className="hidden lg:flex items-center space-x-2 px-3 py-1 rounded-md bg-slate-900 border border-slate-800 text-xs font-mono">
-            <FileText className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-slate-200 font-semibold truncate max-w-xs">{contractName}</span>
+          <div className="hidden md:flex items-center space-x-2 px-3 py-1 rounded-md bg-slate-900 border border-slate-800 text-xs font-mono shrink min-w-0">
+            <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span className="text-slate-200 font-semibold truncate max-w-[120px] lg:max-w-xs">{contractName}</span>
             <span className="text-slate-600">|</span>
-            <span className="text-amber-400 font-medium">{role} Stance ({jurisdiction})</span>
+            <span className="text-amber-400 font-medium whitespace-nowrap">{role} Stance ({jurisdiction})</span>
           </div>
         </div>
 
         {/* Center: 3 DISTINCT PROMINENT TAB BUTTONS */}
-        <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-800 shadow-inner">
+        <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-800 shadow-inner shrink-0">
           <button
             onClick={() => setActiveTab("summary")}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+            className={`flex items-center space-x-1.5 lg:space-x-2 px-2 lg:px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
               activeTab === "summary"
                 ? "bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 shadow-md font-bold"
                 : "text-slate-300 hover:text-white hover:bg-slate-800/60"
             }`}
           >
-            <LayoutDashboard className="w-4 h-4" />
+            <LayoutDashboard className="w-4 h-4 shrink-0" />
             <span>Executive Summary</span>
           </button>
 
           <button
             onClick={() => setActiveTab("audit")}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+            className={`flex items-center space-x-1.5 lg:space-x-2 px-2 lg:px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
               activeTab === "audit"
                 ? "bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 shadow-md font-bold"
                 : "text-slate-300 hover:text-white hover:bg-slate-800/60"
             }`}
           >
-            <FileSearch className="w-4 h-4" />
+            <FileSearch className="w-4 h-4 shrink-0" />
             <span>Clause Audit Canvas</span>
           </button>
 
           <button
             onClick={() => setActiveTab("export")}
-            className={`flex items-center gap-4 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+            className={`flex items-center gap-2 lg:gap-4 px-2 lg:px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
               activeTab === "export"
                 ? "bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 shadow-md font-bold"
                 : "text-slate-300 hover:text-white hover:bg-slate-800/60"
             }`}
           >
-            <SendToBack className="w-4 h-4" />
+            <SendToBack className="w-4 h-4 shrink-0" />
             <span className="whitespace-nowrap">Resolution & Export</span>
             <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
               activeTab === "export" ? "bg-slate-900 text-amber-300" : "bg-emerald-950 text-emerald-300 border border-emerald-800"
@@ -625,26 +641,26 @@ Corporate Legal & Risk Operations Group`;
         </div>
 
         {/* Right Stream status & quick trigger */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
           <button
             onClick={() => setShowUploadModal(true)}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition shadow-sm"
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition shadow-sm shrink-0"
             title="Upload new contract document"
           >
-            <Upload className="w-3.5 h-3.5 text-amber-400" />
+            <Upload className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span className="hidden sm:inline">Ingest Contract</span>
           </button>
 
-          <div className="hidden xl:flex items-center space-x-2 px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-700/70 text-emerald-300 text-[11px] font-mono tracking-tight">
+          <div className="hidden xl:flex items-center space-x-2 px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-700/70 text-emerald-300 text-[11px] font-mono tracking-tight shrink-0">
             <span className={`w-2 h-2 rounded-full bg-emerald-400 ${isStreaming ? 'animate-pulse glow-emerald' : ''}`}></span>
             <span>{isStreaming ? `STREAMING (${clauses.length})` : streamDone ? `${clauses.length} SYNTHESIZED` : `${clauses.length} LOADED`}</span>
           </div>
 
           <button
             onClick={handleExport}
-            className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow ring-1 ring-emerald-400/40"
+            className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow ring-1 ring-emerald-400/40 shrink-0"
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download className="w-3.5 h-3.5 shrink-0" />
             <span className="hidden sm:inline">Export .DOCX</span>
           </button>
         </div>
@@ -1414,11 +1430,11 @@ Corporate Legal & Risk Operations Group`;
 
           {/* Contextual Legal Copilot Slide-Out Panel */}
           {isChatOpen && (
-            <aside className="w-[400px] shrink-0 bg-slate-950 border-l border-slate-800 flex flex-col h-full text-slate-200 z-20 shadow-2xl">
+            <aside className="w-full md:w-[400px] h-full flex flex-col shrink-0 border-l border-slate-800 bg-slate-950 absolute inset-y-0 right-0 z-50 md:relative md:inset-auto md:z-20 text-slate-200 shadow-2xl">
               {/* Copilot Header */}
-              <div className="p-4 border-b border-slate-800 bg-slate-900/90 flex items-center justify-between">
+              <div className="p-4 border-b border-slate-800 bg-slate-900/90 flex items-center justify-between shrink-0">
                 <div className="flex items-center space-x-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-amber-400/20 text-amber-400 flex items-center justify-center border border-amber-400/30">
+                  <div className="w-7 h-7 rounded-lg bg-amber-400/20 text-amber-400 flex items-center justify-center border border-amber-400/30 shrink-0">
                     <Bot className="w-4 h-4" />
                   </div>
                   <div>
@@ -1454,14 +1470,13 @@ Corporate Legal & Risk Operations Group`;
                       {msg.role === 'user' ? 'Counsel' : 'LexiFlow AI'}
                     </span>
                     <div
-                      className={`rounded-xl px-3.5 py-2.5 text-xs max-w-[92%] leading-relaxed whitespace-pre-wrap ${
+                      className={`rounded-xl px-3.5 py-2.5 max-w-[92%] whitespace-pre-wrap break-words text-sm leading-relaxed ${
                         msg.role === 'user'
                           ? 'bg-amber-500 text-slate-950 font-medium'
                           : 'bg-slate-900 border border-slate-800 text-slate-200 shadow-sm'
                       }`}
-                    >
-                      {msg.text}
-                    </div>
+                      dangerouslySetInnerHTML={{ __html: formatChatMessage(msg.text) }}
+                    />
                   </div>
                 ))}
 
@@ -1488,21 +1503,21 @@ Corporate Legal & Risk Operations Group`;
                         }
                       }}
                       placeholder={`Ask about Clause #${activeClause.clause_index} or ${jurisdiction} law... (Enter to send)`}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none font-sans leading-relaxed"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 pr-14 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-none font-sans leading-relaxed"
                     />
+                    <button
+                      type="submit"
+                      disabled={!chatInput.trim() || isChatLoading}
+                      className="absolute right-2.5 bottom-3 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-slate-950 text-xs font-bold transition flex items-center space-x-1.5 shadow"
+                    >
+                      <span>Send</span>
+                      <Send className="w-3 h-3" />
+                    </button>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] text-slate-500 font-mono">
                       Shift+Enter for newline
                     </span>
-                    <button
-                      type="submit"
-                      disabled={!chatInput.trim() || isChatLoading}
-                      className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-slate-950 text-xs font-bold transition flex items-center space-x-1.5 shadow"
-                    >
-                      <span>Send</span>
-                      <Send className="w-3 h-3" />
-                    </button>
                   </div>
                 </form>
               </div>
@@ -1667,9 +1682,7 @@ Corporate Legal & Risk Operations Group`;
                     </button>
 
                     <button
-                      onClick={() => {
-                        window.location.href = `mailto:${recipientEmail}?subject=${encodeURIComponent("Re: Master Cloud Services Agreement - Redlines")}&body=${encodeURIComponent(emailDraftBody)}`;
-                      }}
+                      onClick={handleSendEmail}
                       className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg shadow-sm flex items-center space-x-1.5 transition"
                     >
                       <Send className="w-3.5 h-3.5 text-amber-400" />
