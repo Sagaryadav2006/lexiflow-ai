@@ -14,6 +14,8 @@ load_dotenv()
 class ClauseReviewState(TypedDict):
     clause_id: str
     original_text: str
+    role: str
+    jurisdiction: str
     prosecutor_flags: List[str]
     risk_score: int
     playbook_rules: List[str]
@@ -42,6 +44,29 @@ defender_llm = llm.with_structured_output(DefenderOutput)
 def prosecutor_node(state: ClauseReviewState):
     iteration = state.get("iteration_count", 0)
     text_to_review = state.get("original_text", "")
+    role = state.get("role", "Buyer")
+    jurisdiction = state.get("jurisdiction", "California")
+
+    is_seller = role.strip().lower() == "seller"
+
+    if is_seller:
+        role_perspective = """
+PERSPECTIVE: You represent the SELLER / VENDOR / CONTRACTOR.
+- DEFEND higher liability caps (or insist aggregate liability is strictly capped at total fees paid).
+- ATTACK uncapped indemnification of the Buyer, demanding mutual indemnity or explicit liability caps.
+- ATTACK liquidated damages, punitive delay fees, and arbitrary payment withholdings.
+- PROTECT Seller's pre-existing IP, tools, methodologies, and independent work.
+- RESIST unilateral termination by Buyer without compensation for work completed.
+"""
+    else:
+        role_perspective = """
+PERSPECTIVE: You represent the BUYER / CLIENT / COMMISSION.
+- ATTACK liability caps that excessively limit Seller's liability for breach, gross negligence, or data loss.
+- ATTACK broad Seller disclaimers of representations, warranties, and fitness for purpose.
+- DEMAND robust Seller indemnification protecting Buyer from third-party IP infringement and negligence.
+- DEMAND strict milestones, delivery schedules, liquidated damages for unexcused delays, and audit rights.
+- SECURE full ownership or exclusive perpetual rights in all custom deliverables.
+"""
 
     prompt = f"""
 STRICT ANTI-HALLUCINATION & CLAUSE-ISOLATION POLICY:
@@ -50,13 +75,17 @@ STRICT ANTI-HALLUCINATION & CLAUSE-ISOLATION POLICY:
 3. SAFE CLAUSE RULE (SCORE 0 TO 3): Boilerplate preamble, party identification, standard duties, term dates, equal employment opportunity, safety compliance, or benign administrative clauses MUST receive a `risk_score` between 0 and 2 and an EMPTY `prosecutor_flags` list (`[]`).
 4. FACTUAL & VERIFIED GROUNDING ONLY: Never fabricate facts, dollar amounts, or statutory citations. Base all analysis strictly on the provided clause text.
 
-You are a strict corporate legal auditor. Flag clauses with liquidated damages, asymmetric termination or reprocurement penalties, uncapped one-way indemnification, overbroad IP confiscation or unconditional sublicensing, unilateral internal dispute committees, or non-competes over 1 year with a `risk_score` between 7 and 9.
+{role_perspective}
+GOVERNING JURISDICTION: {jurisdiction}
+- California Law Note: If jurisdiction is California, non-compete clauses are strictly void under Cal. Bus. & Prof. Code § 16600 and MUST be flagged with high risk.
+
+You are a strict corporate legal auditor reviewing this clause on behalf of the {role.upper()}. Flag clauses that impose disproportionate legal or commercial risk against the {role.upper()} with an appropriate `risk_score` (between 7 and 10 for high/critical risks).
 
 Clause text:
 {text_to_review}
 """
 
-    print(f"[Pipeline] Processing clause {state.get('clause_id')}...")
+    print(f"[Pipeline] Processing clause {state.get('clause_id')} for {role} in {jurisdiction}...")
     result = structured_llm.invoke(prompt)
 
     return {
@@ -69,6 +98,8 @@ Clause text:
 def defender_node(state: ClauseReviewState):
     flags = state.get("prosecutor_flags", [])
     text_to_amend = state.get("original_text", "")
+    role = state.get("role", "Buyer")
+    jurisdiction = state.get("jurisdiction", "California")
 
     prompt = f"""
 STRICT ANTI-HALLUCINATION & CLAUSE-ISOLATION POLICY:
@@ -76,7 +107,14 @@ STRICT ANTI-HALLUCINATION & CLAUSE-ISOLATION POLICY:
 2. NO HALLUCINATED CLAUSES: NEVER append or invent additional numbered sections that were not in the original clause text.
 3. NO INLINE DICTIONARY BRACKETS: Write clean, natural legal prose in `amended_text`.
 
-Rewrite the following contract clause to resolve these identified risks:
+CLIENT ROLE: {role.upper()}
+JURISDICTION: {jurisdiction}
+- Ensure that all redlines strictly comply with local state laws for {jurisdiction}.
+- If jurisdiction is California: non-compete clauses are void as a matter of public policy (Cal. Bus. & Prof. Code § 16600); strike any non-compete restrictions entirely and preserve only legitimate trade secret protections.
+- If jurisdiction is Delaware or New York: ensure balanced commercial enforceability, mutual remedies, and standard indemnification limits.
+- Draft redlines that protect the legitimate business interests of the {role.upper()}.
+
+Rewrite the following contract clause to resolve these identified risks from the perspective of the {role}:
 {', '.join(flags)}
 
 Clause text:
@@ -108,37 +146,91 @@ graph_builder.add_edge("defender_node", END)
 agent_graph = graph_builder.compile()
 
 
-def check_deterministic_guardrails(clause_text: str) -> dict | None:
+def check_deterministic_guardrails(clause_text: str, jurisdiction: str = "", role: str = "Buyer") -> dict | None:
     """
     Deterministic legal guardrail engine covering both the 5-clause contractor agreements
     and multi-page commercial/government contracts (e.g. SampleContract-Shuttle.pdf).
+    Includes California statutory non-compete voidance and role-aware risk posture.
     """
     text_lower = clause_text.lower()
+    jurisdiction_clean = (jurisdiction or "").strip().lower()
+    is_california = "california" in jurisdiction_clean or jurisdiction_clean == "ca"
+    is_seller = role.strip().lower() == "seller"
+
+    # Identify non-compete or restraint of trade language
+    is_non_compete = (
+        "non-compete" in text_lower
+        or "noncompete" in text_lower
+        or "covenant not to compete" in text_lower
+        or "covenants not to compete" in text_lower
+        or "restraint of trade" in text_lower
+        or "twenty-five (25)" in text_lower
+        or "25 years" in text_lower
+        or "known universe" in text_lower
+    )
+
+    # 0. California Non-Compete Statutory Guardrail (Cal. Bus. & Prof. Code § 16600)
+    # Strictly void as a matter of California public policy
+    if is_california and is_non_compete:
+        return {
+            "risk_score": 10,
+            "risk_analysis": [
+                "CRITICAL VIOLATION - Void Under California Law: Under California Business and Professions Code § 16600, non-compete agreements and covenants restraining an individual from engaging in a lawful profession, trade, or business are strictly void ab initio as a matter of public policy."
+            ],
+            "violations": [
+                "Strict statutory prohibition under California Business and Professions Code Section 16600",
+                "Strike non-compete clause in its entirety as void and illegal",
+                "Restrict post-termination obligations strictly to non-disclosure of proprietary trade secrets"
+            ],
+            "amended_text": (
+                "3. Restrictive Covenants and Compliance with California Law. The parties acknowledge and agree that pursuant "
+                "to California Business and Professions Code Section 16600, Contractor is not subject to any non-compete restraint "
+                "or post-termination covenant against competition. Contractor agrees solely to maintain the confidentiality of Company "
+                "proprietary trade secrets in accordance with Section 4."
+            )
+        }
 
     # 1. Liquidated Damages / Delay Penalties (Contractor Agreements & MSAs)
     if "liquidated damages" in text_lower or "$500,000" in text_lower or "$350,000" in text_lower or "delayed beyond" in text_lower:
         fee_match = re.search(r'\$(?:150,000|85,000|[0-9,]+)', clause_text)
         base_fee = fee_match.group(0) if fee_match else "$150,000"
-        return {
-            "risk_score": 9,
-            "risk_analysis": [
-                "Severe financial exposure: Disproportionate liquidated damages penalty far exceeds the base contract value and triggers on any delay without a grace or cure period."
-            ],
-            "violations": [
-                "Cap liquidated damages at 10% of total contract value",
-                "Add a 15-day written notice and cure period before penalties apply",
-                "Carve out delays caused by Company or force majeure"
-            ],
-            "amended_text": (
-                f"2. Compensation and Penalties. The Company agrees to pay the Contractor a total sum of {base_fee} "
-                "for the completion of the project deliverables. In the event of a delay caused solely by the Contractor, "
-                "liquidated damages shall be capped at 10% of the total contract value and shall only apply after a "
-                "15-day written notice and cure period, excluding delays caused by the Company or force majeure."
-            )
-        }
+        if is_seller:
+            return {
+                "risk_score": 9,
+                "risk_analysis": [
+                    "Severe financial exposure for Seller/Contractor: Disproportionate liquidated damages penalty far exceeds the base contract value and triggers on any delay without a grace or cure period."
+                ],
+                "violations": [
+                    "Cap liquidated damages at 10% of total contract value",
+                    "Add a 15-day written notice and cure period before penalties apply",
+                    "Carve out delays caused by Company or force majeure"
+                ],
+                "amended_text": (
+                    f"2. Compensation and Penalties. The Company agrees to pay the Contractor a total sum of {base_fee} "
+                    "for the completion of the project deliverables. In the event of a delay caused solely by the Contractor, "
+                    "liquidated damages shall be capped at 10% of the total contract value and shall only apply after a "
+                    "15-day written notice and cure period, excluding delays caused by the Company or force majeure."
+                )
+            }
+        else:
+            return {
+                "risk_score": 7,
+                "risk_analysis": [
+                    "Liquidated damages clause: Assess whether delay damages are reasonably calibrated to compensate Buyer without constituting an unenforceable penalty."
+                ],
+                "violations": [
+                    "Ensure liquidated damages represent a genuine pre-estimate of Buyer's administrative delay losses",
+                    "Reserve Buyer's right to terminate for cause upon material or unexcused milestone delay"
+                ],
+                "amended_text": (
+                    f"2. Milestones and Deliverables. The Company agrees to pay Contractor a total sum of {base_fee} "
+                    "upon timely delivery. In the event of unexcused Contractor delay, Contractor shall pay agreed liquidated damages "
+                    "representing an agreed pre-estimate of Buyer's operational delay damages, subject to statutory limits."
+                )
+            }
 
-    # 2. Predatory Non-Compete (Contractor Agreements & MSAs)
-    if "twenty-five (25)" in text_lower or "25 years" in text_lower or "known universe" in text_lower or "non-compete" in text_lower:
+    # 2. Predatory Non-Compete (Non-California Jurisdictions)
+    if is_non_compete:
         return {
             "risk_score": 9,
             "risk_analysis": [
@@ -345,9 +437,9 @@ def is_standard_safe_boilerplate(clause_text: str) -> bool:
     return False
 
 
-async def analyze_clause(clause_text: str) -> dict:
+async def analyze_clause(clause_text: str, role: str = "Buyer", jurisdiction: str = "California") -> dict:
     # 1. Check deterministic high-risk legal guardrails first
-    guardrail_hit = check_deterministic_guardrails(clause_text)
+    guardrail_hit = check_deterministic_guardrails(clause_text, jurisdiction=jurisdiction, role=role)
     if guardrail_hit is not None:
         return guardrail_hit
 
@@ -364,6 +456,8 @@ async def analyze_clause(clause_text: str) -> dict:
     initial_state = ClauseReviewState(
         clause_id="temp",
         original_text=clause_text,
+        role=role,
+        jurisdiction=jurisdiction,
         prosecutor_flags=[],
         risk_score=0,
         playbook_rules=[],

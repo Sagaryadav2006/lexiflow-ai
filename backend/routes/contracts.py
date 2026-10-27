@@ -1,15 +1,21 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, Query, HTTPException
 from fastapi.responses import StreamingResponse
 import json
 from typing import List, Optional
+from enum import Enum
 from bson import ObjectId
 from database import contracts_collection, clauses_collection
 from utils.pii_masker import mask_pii, unmask_pii
+from utils.docx_exporter import build_contract_docx
 from agent_graph import agent_graph, ClauseReviewState, llm
 from pydantic import BaseModel
 import io
 import re
 import docx
+
+class RoleEnum(str, Enum):
+    BUYER = "Buyer"
+    SELLER = "Seller"
 
 router = APIRouter()
 
@@ -177,8 +183,23 @@ def split_contract_into_clauses(full_text: str) -> List[str]:
 
 
 @router.post("/upload")
-async def upload_contract(file: UploadFile = File(...)):
+@router.post("/analyze")
+async def upload_contract(
+    file: UploadFile = File(...),
+    role: Optional[str] = Form(None),
+    jurisdiction: Optional[str] = Form(None),
+    role_query: Optional[str] = Query(None, alias="role"),
+    jurisdiction_query: Optional[str] = Query(None, alias="jurisdiction")
+):
     try:
+        # Resolve role parameter (default: "Buyer", valid options: "Buyer", "Seller")
+        raw_role = (role or role_query or "Buyer").strip()
+        selected_role = "Seller" if raw_role.lower() == "seller" else "Buyer"
+
+        # Resolve jurisdiction parameter (default: "California")
+        raw_jurisdiction = (jurisdiction or jurisdiction_query or "California").strip()
+        selected_jurisdiction = raw_jurisdiction if raw_jurisdiction else "California"
+
         filename_lower = (file.filename or "").lower()
         if not (filename_lower.endswith(".pdf") or filename_lower.endswith(".docx")):
             raise HTTPException(status_code=400, detail="Only .pdf and .docx files are supported")
@@ -207,10 +228,12 @@ async def upload_contract(file: UploadFile = File(...)):
 
         full_masked_text = "\n\n".join(clause_splits)
 
-        # 4. Save contract metadata to get a contract_id
+        # 4. Save contract metadata with role and jurisdiction to MongoDB
         contract_doc = {
             "filename": file.filename,
             "status": "processed",
+            "role": selected_role,
+            "jurisdiction": selected_jurisdiction,
             "pii_mapping": document_mapping,
             "raw_text": full_masked_text
         }
@@ -226,11 +249,14 @@ async def upload_contract(file: UploadFile = File(...)):
                 "clause_index": index,
                 "original_text": masked_para,
                 "masked_text": masked_para,
+                "role": selected_role,
+                "jurisdiction": selected_jurisdiction,
                 "risk_score": 0,
                 "status": "pending",
                 "prosecutor_flags": [],
                 "playbook_rules": [],
-                "amended_text": ""
+                "amended_text": "",
+                "defender_redline": ""
             }
             clauses_to_insert.append(clause_doc)
 
@@ -242,17 +268,22 @@ async def upload_contract(file: UploadFile = File(...)):
                     "clause_id": str(cid),
                     "original_text": c["original_text"],
                     "masked_text": c["masked_text"],
+                    "role": selected_role,
+                    "jurisdiction": selected_jurisdiction,
                     "risk_score": c["risk_score"],
                     "status": c["status"],
                     "prosecutor_flags": c["prosecutor_flags"],
                     "playbook_rules": c["playbook_rules"],
                     "amended_text": c["amended_text"],
+                    "defender_redline": c["defender_redline"],
                     "iteration_count": 0
                 })
 
         return {
             "message": "Contract uploaded successfully",
             "contract_id": str(contract_id),
+            "role": selected_role,
+            "jurisdiction": selected_jurisdiction,
             "clauses_count": len(clauses_to_insert),
             "clauses": response_clauses
         }
@@ -265,9 +296,23 @@ async def upload_contract(file: UploadFile = File(...)):
 
 
 @router.get("/{contract_id}/stream")
-async def stream_contract_review(contract_id: str):
+async def stream_contract_review(
+    contract_id: str,
+    role: Optional[str] = Query(None),
+    jurisdiction: Optional[str] = Query(None)
+):
     async def event_generator():
-        cursor = clauses_collection.find({"contract_id": ObjectId(contract_id)}).sort("clause_index", 1)
+        try:
+            contract_oid = ObjectId(contract_id)
+        except Exception:
+            yield f"data: {json.dumps({'event': 'clause_error', 'clause_id': '', 'error': 'Invalid contract ID'})}\n\n"
+            return
+
+        contract = await contracts_collection.find_one({"_id": contract_oid})
+        active_role = role or (contract.get("role") if contract else None) or "Buyer"
+        active_jurisdiction = jurisdiction or (contract.get("jurisdiction") if contract else None) or "California"
+
+        cursor = clauses_collection.find({"contract_id": contract_oid}).sort("clause_index", 1)
         clauses = await cursor.to_list(length=None)
 
         from agent_graph import analyze_clause
@@ -277,16 +322,23 @@ async def stream_contract_review(contract_id: str):
             clause_id_str = str(item.get("_id", idx)) if isinstance(item, dict) else str(idx)
 
             try:
-                analysis = await analyze_clause(clause_text)
+                analysis = await analyze_clause(
+                    clause_text,
+                    role=active_role,
+                    jurisdiction=active_jurisdiction
+                )
 
                 payload = {
                     "clause_index": idx,
                     "clause_id": clause_id_str,
                     "original_text": clause_text,
+                    "role": active_role,
+                    "jurisdiction": active_jurisdiction,
                     "risk_score": analysis["risk_score"],
                     "risk_analysis": analysis["risk_analysis"],
                     "violations": analysis["violations"],
                     "amended_text": analysis["amended_text"],
+                    "defender_redline": analysis["amended_text"],
                     "status": "completed"
                 }
 
@@ -299,6 +351,9 @@ async def stream_contract_review(contract_id: str):
                         "prosecutor_flags": analysis["risk_analysis"],
                         "playbook_rules": analysis["violations"],
                         "amended_text": analysis["amended_text"],
+                        "defender_redline": analysis["amended_text"],
+                        "role": active_role,
+                        "jurisdiction": active_jurisdiction,
                         "status": "completed"
                     }}
                 )
@@ -502,4 +557,35 @@ async def export_pushback_email(contract_id: str):
         buffer,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": "attachment; filename=Pushback_Email.docx"}
+    )
+
+
+@router.get("/export/docx/{contract_id}")
+@router.get("/{contract_id}/export/docx")
+async def export_contract_docx(contract_id: str):
+    """
+    Exports a native Word (.docx) document with visual redlines (strikethrough/red, underline/green)
+    sorted by clause_index, unmasking PII if mapping exists.
+    """
+    try:
+        contract_oid = ObjectId(contract_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid contract ID")
+
+    contract = await contracts_collection.find_one({"_id": contract_oid})
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    cursor = clauses_collection.find({"contract_id": contract_oid}).sort("clause_index", 1)
+    clauses = await cursor.to_list(length=None)
+
+    buffer = build_contract_docx(contract, clauses)
+
+    clean_name = re.sub(r'\.(pdf|docx)$', '', contract.get('filename', 'Contract'), flags=re.IGNORECASE)
+    filename = f"{clean_name}_Redlined.docx"
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )

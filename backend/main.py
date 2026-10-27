@@ -31,3 +31,9 @@ app.include_router(clauses.router, prefix="/api/clauses", tags=["Clauses"])
 @app.get("/")
 async def root():
     return {"message": "LexiFlow AI API is running"}
+
+
+@app.get("/export/docx/{contract_id}", tags=["Export"])
+async def export_contract_docx_root(contract_id: str):
+    """Direct root-level DOCX export endpoint matching GET /export/docx/{contract_id}."""
+    return await contracts.export_contract_docx(contract_id)
