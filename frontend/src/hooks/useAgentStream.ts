@@ -4,10 +4,13 @@ export interface Clause {
   clause_id: string;
   original_text: string;
   masked_text: string;
+  role?: string;
+  jurisdiction?: string;
   prosecutor_flags: string[];
   risk_score: number;
   playbook_rules: string[];
   amended_text: string;
+  defender_redline?: string;
   iteration_count: number;
 }
 

@@ -17,7 +17,24 @@ module.exports = {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+        serif: ['Merriweather', 'Georgia', 'serif'],
+        mono: ['"JetBrains Mono"', 'monospace'],
+      },
       colors: {
+        canvas: '#f8f7f4',
+        panel: '#ffffff',
+        navy: {
+          900: '#0c1322',
+          950: '#070b14',
+        },
+        slate: {
+          850: '#141e33',
+          900: '#0f172a',
+          925: '#0b1120',
+          950: '#060a12',
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
