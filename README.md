@@ -14,15 +14,17 @@ Backend API (Render): Cloud-hosted FastAPI service with Server-Sent Events (SSE)
 
 ✨ Core Features
 
-🛡️ Zero-Trust PII Shielding: Integrates Microsoft Presidio, a lightweight spaCy NLP model (en_core_web_sm), and custom deterministic regex. Sensitive entities (names, addresses, organizations) are masked before leaving the server, ensuring strict data privacy compliance during LLM processing.
+🛡️ Zero-Trust PII Shielding: Integrates Microsoft Presidio, a lightweight spaCy NLP model (en_core_web_sm), and custom deterministic regex. Sensitive entities (names, addresses, organizations) are masked before leaving the server, ensuring strict data privacy compliance (including the DPDP Act 2023) during LLM processing.
 
 ⚖️ Dual-Agent Risk Engine (LangGraph): Utilizes a sophisticated "Prosecutor/Defender" architecture powered by the Groq API (GPT-OSS-20b). The Prosecutor node audits isolated clauses for liabilities, while the Defender node drafts clean, natural-language redline amendments to cure identified risks.
 
-🚦 Deterministic Legal Guardrails: Bypasses LLM hallucination using a hardcoded Python risk-routing engine. It instantly flags universal commercial hazards—such as uncapped one-way indemnification, predatory 25-year non-competes, and asymmetric termination rights—ensuring 100% accuracy on critical financial risks.
+🚦 Deterministic Legal Guardrails: Bypasses LLM hallucination using a hardcoded Python risk-routing engine. It instantly flags universal commercial hazards—such as uncapped one-way indemnification, predatory 25-year non-competes, and asymmetric termination rights—ensuring 100% accuracy on critical financial risks aligned with the Indian Contract Act 1872.
 
 ⚡ Asynchronous SSE Streaming: A multi-processed FastAPI backend splits complex .pdf and .docx files into clean structural nodes and streams the AI analysis back to the client via Server-Sent Events (SSE), eliminating API timeout failures on 20+ page documents.
 
-📊 Executive Legal Health Suite: A highly interactive React/TypeScript frontend featuring a real-time clause navigation slider, an aggregate financial exposure dashboard, an automated pushback-email generator, and a conversational AI chat assistant for contract queries.
+📊 Executive Legal Health Suite: A highly interactive React/TypeScript frontend featuring a real-time clause navigation slider, an aggregate financial exposure dashboard, an automated pushback-email generator (which aggregates all critical/high risks), and a conversational AI chat assistant for contract queries.
+
+📑 Dynamic Multi-Format Export: Dynamically compile audited contracts into Native OpenXML Track Changes (.DOCX), Executive Briefs (.PDF), and Structured Telemetry (.JSON) via a modular API routing system.
 
 🏗️ System Architecture
 
@@ -34,9 +36,9 @@ Guardrail Routing: The system checks clauses against hardcoded deterministic leg
 
 Agentic Audit (LangGraph): Novel clauses are passed to the Groq-powered LangGraph pipeline. The Prosecutor grades the risk (0-10); if risky (>=4), the Defender iteratively drafts amendments.
 
-Real-time Streaming: Results are streamed to the React UI via SSE, updating the clause slider and risk metrics dynamically.
+Real-time Streaming: Results are streamed to the React UI via SSE, updating the clause carousel and risk metrics dynamically.
 
-Deanonymization & Export: Redlined text is deanonymized securely and can be exported as a Word Document (.docx) audit report or pushback email.
+Deanonymization & Export: Redlined text is deanonymized securely and exported via the dynamic multi-format export module or the pushback email generator.
 
 💻 Tech Stack
 
@@ -54,7 +56,7 @@ Framework: Python, FastAPI, Uvicorn
 
 AI & NLP: LangGraph, LangChain, Groq API, Microsoft Presidio, spaCy (en_core_web_sm)
 
-Document Processing: pypdf, PyMuPDF (fitz), python-docx
+Document Processing: pypdf, PyMuPDF (fitz), python-docx, fpdf2
 
 Database: MongoDB Atlas (accessed via motor async driver)
 
@@ -71,6 +73,8 @@ Node.js 18+
 MongoDB Atlas Cluster
 
 Groq API Key
+
+
 
 📝 License
 
