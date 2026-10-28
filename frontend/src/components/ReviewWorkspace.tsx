@@ -37,7 +37,11 @@ import {
   Bot
 } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const Config = {
+  API_URL: import.meta.env.VITE_API_URL || 'http://localhost:8000'
+};
+
+const API_BASE_URL = Config.API_URL;
 
 export interface ProcessedClause {
   clause_id: string;
@@ -447,7 +451,7 @@ export function ReviewWorkspace() {
       return;
     }
     setExportToast(true);
-    window.open(`http://localhost:8000/api/contracts/${contractId}/export?format=${exportFormat}`);
+    window.open(`${Config.API_URL}/api/contracts/${contractId}/export?format=${exportFormat}`, '_blank');
     setTimeout(() => setExportToast(false), 4500);
   };
   const handleExport = handleDownload;
