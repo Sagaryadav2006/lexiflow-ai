@@ -1,24 +1,35 @@
 import React, { useState } from 'react';
-import { Wand2 } from 'lucide-react';
+import { Wand2, AlertCircle } from 'lucide-react';
 
 export function ContractBuilder() {
-  const [agreement_type, setAgreementType] = useState('Master Services Agreement (MSA)');
+  const [agreementType, setAgreementType] = useState('Master Services Agreement (MSA)');
   const [jurisdiction, setJurisdiction] = useState('California, United States');
-  const [primary_party, setPrimaryParty] = useState('Acme Technologies Inc.');
-  const [counter_party, setCounterParty] = useState('Global Enterprise Solutions LLC');
-  const [posture, setPosture] = useState('Balanced & Mutual');
-  const [special_provisions, setSpecialProvisions] = useState(
+  const [primaryParty, setPrimaryParty] = useState('Acme Technologies Inc.');
+  const [counterParty, setCounterParty] = useState('Global Enterprise Solutions LLC');
+  const [draftingPosture, setDraftingPosture] = useState('Balanced & Mutual');
+  const [specialProvisions, setSpecialProvisions] = useState(
     'Include 30-day cure period for material breach, strict confidentiality with DPDP Act 2023 and GDPR provisions, and mutual indemnity for IP infringement.'
   );
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [draftedContract, setDraftedContract] = useState<string>('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleGenerate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    setErrorMessage(null);
     setIsLoading(true);
 
     try {
+      const payload = {
+        agreement_type: agreementType,
+        jurisdiction: jurisdiction,
+        primary_party: primaryParty,
+        counter_party: counterParty,
+        posture: draftingPosture,
+        special_provisions: specialProvisions,
+      };
+
       const response = await fetch(
         `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/contracts/generate`,
         {
@@ -26,27 +37,21 @@ export function ContractBuilder() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            agreement_type,
-            jurisdiction,
-            primary_party,
-            counter_party,
-            posture,
-            special_provisions,
-          }),
+          body: JSON.stringify(payload),
         }
       );
 
       if (!response.ok) {
-        throw new Error(`Failed to generate contract: HTTP ${response.status}`);
+        throw new Error(response.statusText || `Request failed with status ${response.status}`);
       }
 
       const data = await response.json();
       if (data.drafted_contract) {
         setDraftedContract(data.drafted_contract);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error calling /api/contracts/generate:', error);
+      setErrorMessage(error.message || 'Failed to generate contract. Check API connection.');
     } finally {
       setIsLoading(false);
     }
@@ -78,7 +83,7 @@ export function ContractBuilder() {
                 AGREEMENT TYPE
               </label>
               <select
-                value={agreement_type}
+                value={agreementType}
                 onChange={(e) => setAgreementType(e.target.value)}
                 className="w-full bg-[#fbfbfa] border border-slate-300 rounded-xl p-3 text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-800 shadow-inner"
               >
@@ -115,7 +120,7 @@ export function ContractBuilder() {
               </label>
               <input
                 type="text"
-                value={primary_party}
+                value={primaryParty}
                 onChange={(e) => setPrimaryParty(e.target.value)}
                 placeholder="e.g. Acme Technologies Inc."
                 className="w-full bg-[#fbfbfa] border border-slate-300 rounded-xl p-3 text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-800 shadow-inner"
@@ -128,7 +133,7 @@ export function ContractBuilder() {
               </label>
               <input
                 type="text"
-                value={counter_party}
+                value={counterParty}
                 onChange={(e) => setCounterParty(e.target.value)}
                 placeholder="e.g. Global Enterprise Solutions LLC"
                 className="w-full bg-[#fbfbfa] border border-slate-300 rounded-xl p-3 text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-800 shadow-inner"
@@ -142,8 +147,8 @@ export function ContractBuilder() {
                 DRAFTING POSTURE / BIAS
               </label>
               <select
-                value={posture}
-                onChange={(e) => setPosture(e.target.value)}
+                value={draftingPosture}
+                onChange={(e) => setDraftingPosture(e.target.value)}
                 className="w-full bg-[#fbfbfa] border border-slate-300 rounded-xl p-3 text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-800 shadow-inner"
               >
                 <option value="Balanced & Mutual">Balanced & Mutual (Recommended)</option>
@@ -169,12 +174,18 @@ export function ContractBuilder() {
             </label>
             <textarea
               rows={4}
-              value={special_provisions}
+              value={specialProvisions}
               onChange={(e) => setSpecialProvisions(e.target.value)}
               placeholder="Specify custom warranties, restrictive covenants, data protection measures, termination triggers, or fallback clauses..."
               className="w-full bg-[#fbfbfa] border border-slate-300 rounded-xl p-3 text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-800 shadow-inner resize-y"
             />
           </div>
+
+          {errorMessage && (
+            <div className="text-red-500 text-xs font-bold mb-4 bg-red-100 p-3 rounded-lg border border-red-200 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" /> {errorMessage}
+            </div>
+          )}
 
           <button
             type="submit"

@@ -20,3 +20,6 @@ pypdf
 PyMuPDF
 pydantic
 fpdf2
+langchain-huggingface
+langchain-mongodb
+sentence-transformers

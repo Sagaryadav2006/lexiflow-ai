@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes import contracts, clauses
 from routes.builder import builder_router
+from routes.counsel import counsel_router
 
 app = FastAPI(title="LexiFlow AI Backend")
 
@@ -29,6 +30,7 @@ app.add_middleware(
 app.include_router(contracts.router, prefix="/api/contracts", tags=["Contracts"])
 app.include_router(clauses.router, prefix="/api/clauses", tags=["Clauses"])
 app.include_router(builder_router, prefix="/api/contracts")
+app.include_router(counsel_router, prefix="/api/counsel")
 
 @app.get("/")
 async def root():
