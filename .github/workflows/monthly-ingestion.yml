@@ -10,4 +10,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Render Seeding Endpoint
-        run: curl -X POST https://lexiflow-ai-ow44.onrender.com/api/counsel/seed -H "Content-Type: application/json"
+        run: |
+          curl -X POST https://lexiflow-ai-ow44.onrender.com/api/counsel/seed -H "Content-Type: application/json"
