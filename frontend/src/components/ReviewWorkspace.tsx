@@ -193,6 +193,118 @@ const emptyClauseFallback: ProcessedClause = {
   flags: 0
 };
 
+export const FULL_CLAUSES_DATA: ProcessedClause[] = [
+  {
+    clause_id: 'sample-clause-1',
+    clause_index: 1,
+    title: 'Restrictive Covenant & Non-Compete',
+    section: 'Article 3: Non-Compete Undertakings',
+    risk_score: 10,
+    risk_category: 'Critical',
+    original_text:
+      '3. Non-Compete. Contractor agrees not to compete with the Company anywhere in the State of California or nationwide for a period of twenty-four (24) months following termination of this Agreement for any reason, directly or indirectly engaging in any competitive cloud orchestration enterprise.',
+    amended_text:
+      '3. Non-Compete & Statutory Safeguards. Contractor agrees to protect Company proprietary confidential data and trade secrets. In accordance with California Business and Professions Code § 16600 and prevailing Delaware Chancery principles, all post-termination covenants restraining lawful employment or competitive enterprise are deemed non-enforceable and void ab initio.',
+    analysis: [
+      'Statutory Violation: Express breach of California Business and Professions Code § 16600, rendering post-termination non-compete void and subjecting employer to unfair business practices liability.',
+      'Unreasonable Geographic & Temporal Scope: 24-month nationwide ban exceeds common-law reasonableness standards under Delaware commercial doctrine.'
+    ],
+    exposure: '$1,800,000',
+    exposure_amount: 1800000,
+    flags: 2,
+    role: 'Buyer',
+    jurisdiction: 'California',
+    status: 'flagged'
+  },
+  {
+    clause_id: 'sample-clause-2',
+    clause_index: 2,
+    title: 'Unilateral Super-Indemnification',
+    section: 'Article 8: Indemnification Obligations',
+    risk_score: 9.2,
+    risk_category: 'Critical',
+    original_text:
+      '8. Indemnification. Buyer shall defend, indemnify, and hold harmless Seller, its parent entities, affiliates, officers, and agents against any and all claims, regulatory penalties, loss of profits, and third-party liabilities arising from or related to the usage of the Cloud Infrastructure, without monetary cap.',
+    amended_text:
+      '8. Mutual Indemnification. Each party ("Indemnifying Party") shall defend and indemnify the other party from and against third-party claims arising solely out of gross negligence, willful misconduct, or direct infringement of intellectual property rights, subject to the Limitation of Liability provisions in Section 9.',
+    analysis: [
+      'Unilateral Liability Trap: Buyer is forced to indemnify Seller for risks outside Buyer operational control without reciprocal protections.',
+      'Uncapped Exposure: Complete absence of a financial liability ceiling creates catastrophic balance sheet exposure.'
+    ],
+    exposure: '$1,250,000',
+    exposure_amount: 1250000,
+    flags: 2,
+    role: 'Buyer',
+    jurisdiction: 'Delaware',
+    status: 'flagged'
+  },
+  {
+    clause_id: 'sample-clause-3',
+    clause_index: 3,
+    title: 'Severe Limitation of Liability & Exclusion',
+    section: 'Article 9: Limitation of Liability',
+    risk_score: 7.8,
+    risk_category: 'High',
+    original_text:
+      '9. Limitation of Liability. IN NO EVENT SHALL SELLER BE LIABLE FOR CONSEQUENTIAL, INDIRECT, OR SPECIAL DAMAGES. SELLER TOTAL AGGREGATE LIABILITY SHALL NOT EXCEED FEES PAID BY BUYER IN THE ONE (1) MONTH PRECEDING THE CLAIM.',
+    amended_text:
+      '9. Mutual Limitation of Liability. Except for indemnification obligations and breaches of confidentiality, neither party total aggregate liability under this Agreement shall exceed the total amount of fees paid or payable by Buyer in the twelve (12) months preceding the event giving rise to liability.',
+    analysis: [
+      'Asymmetric Remedy: A 1-month fee ceiling essentially strips Buyer of meaningful recovery in the event of prolonged system downtime or data destruction.',
+      'Exclusion of Direct Outage Costs: Overly broad waiver excludes foreseeable operational damages caused by Vendor outage.'
+    ],
+    exposure: '$650,000',
+    exposure_amount: 650000,
+    flags: 2,
+    role: 'Buyer',
+    jurisdiction: 'Delaware',
+    status: 'flagged'
+  },
+  {
+    clause_id: 'sample-clause-4',
+    clause_index: 4,
+    title: 'Data Processing & Fiduciary Transfer',
+    section: 'Article 12: Data Protection & Privacy',
+    risk_score: 5.5,
+    risk_category: 'Moderate',
+    original_text:
+      '12. Data Privacy. Vendor may process, replicate, and transfer customer personal data across international multi-tenant cloud storage regions at its sole discretion, in accordance with Vendor general privacy guidelines as amended periodically.',
+    amended_text:
+      '12. Data Privacy & Compliance. Vendor shall process personal data solely in compliance with documented Customer instructions and applicable data protection regulations including the Digital Personal Data Protection Act 2023 (DPDP) and GDPR. Cross-border transfers must satisfy statutory adequacy requirements.',
+    analysis: [
+      'Unilateral Discretion: Vendor can alter security and processing terms without Customer notice or approval.',
+      'Regulatory Exposure: Failure to bind sub-processors violates DPDP Act 2023 Section 8 fiduciary accountability requirements.'
+    ],
+    exposure: '$250,000',
+    exposure_amount: 250000,
+    flags: 2,
+    role: 'Buyer',
+    jurisdiction: 'California',
+    status: 'flagged'
+  },
+  {
+    clause_id: 'sample-clause-5',
+    clause_index: 5,
+    title: 'Governing Law & Chancery Forum',
+    section: 'Article 15: Dispute Resolution & Jurisdiction',
+    risk_score: 1.5,
+    risk_category: 'Safe',
+    original_text:
+      '15. Governing Law. This Agreement shall be governed by and construed in accordance with the laws of the State of Delaware, and the parties irrevocably submit to the exclusive jurisdiction of the Delaware Court of Chancery.',
+    amended_text:
+      '15. Governing Law. This Agreement shall be governed by and construed in accordance with the laws of the State of Delaware, and the parties irrevocably submit to the exclusive jurisdiction of the Delaware Court of Chancery.',
+    analysis: [
+      'Standard Commercial Baseline: Clear Delaware governing law and Court of Chancery venue provides predictable judicial precedents for corporate transactions.'
+    ],
+    exposure: '$0',
+    exposure_amount: 0,
+    flags: 1,
+    role: 'Buyer',
+    jurisdiction: 'Delaware',
+    status: 'passed'
+  }
+];
+
 export function ReviewWorkspace() {
   // Top-Level Active Navigation View: 'summary' | 'audit' | 'export'
   const [activeTab, setActiveTab] = useState<"summary" | "audit" | "export">("summary");
@@ -201,22 +313,68 @@ export function ReviewWorkspace() {
   const [contractId, setContractId] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
       const p = new URLSearchParams(window.location.search);
-      return p.get('contract_id') || p.get('id') || null;
+      const urlId = p.get('contract_id') || p.get('id');
+      if (urlId) return urlId;
+      if (sessionStorage.getItem('lexiflow_has_active_workspace') === 'true') {
+        return sessionStorage.getItem('lexiflow_active_contract_id') || 'sample-delaware-mcsa';
+      }
     }
     return null;
   });
-  const [contractName, setContractName] = useState<string>("Master Cloud Services Agreement v4.2");
+  const [contractName, setContractName] = useState<string>(() => {
+    if (typeof window !== 'undefined' && sessionStorage.getItem('lexiflow_has_active_workspace') === 'true') {
+      return sessionStorage.getItem('lexiflow_active_contract_name') || "Master Cloud Services Agreement v4.2";
+    }
+    return "Master Cloud Services Agreement v4.2";
+  });
   const [role, setRole] = useState<string>("Buyer");
   const [jurisdiction, setJurisdiction] = useState<string>("California");
-  const [clauses, setClauses] = useState<ProcessedClause[]>([]);
+  const [clauses, setClauses] = useState<ProcessedClause[]>(() => {
+    if (typeof window !== 'undefined' && sessionStorage.getItem('lexiflow_has_active_workspace') === 'true') {
+      return FULL_CLAUSES_DATA;
+    }
+    return [];
+  });
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
-  const [streamDone, setStreamDone] = useState<boolean>(false);
+  const [streamDone, setStreamDone] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && sessionStorage.getItem('lexiflow_has_active_workspace') === 'true') {
+      return true;
+    }
+    return false;
+  });
 
   // Upload Modal State
-  const [showUploadModal, setShowUploadModal] = useState<boolean>(!contractId);
+  const [showUploadModal, setShowUploadModal] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const hasActive = sessionStorage.getItem('lexiflow_has_active_workspace') === 'true';
+      if (hasActive) return false;
+      const p = new URLSearchParams(window.location.search);
+      if (p.get('contract_id') || p.get('id')) return false;
+    }
+    return true;
+  });
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Dismiss / Bypass Ingestion Modal Handler
+  const handleDismissModal = () => {
+    setShowUploadModal(false);
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('lexiflow_has_active_workspace', 'true');
+      sessionStorage.setItem('lexiflow_active_contract_id', contractId || 'sample-delaware-mcsa');
+      sessionStorage.setItem('lexiflow_active_contract_name', contractName || 'Master Cloud Services Agreement v4.2');
+    }
+    if (!contractId) {
+      setContractId('sample-delaware-mcsa');
+    }
+    if (clauses.length === 0) {
+      setClauses(FULL_CLAUSES_DATA);
+      setStreamDone(true);
+      setAcceptedClauses([4, 5]);
+      setSelectedClauseIndex(1);
+    }
+  };
 
   // Clause Navigator state
   const [selectedClauseIndex, setSelectedClauseIndex] = useState<number>(1);
@@ -251,7 +409,7 @@ export function ReviewWorkspace() {
 
   // Connect to SSE stream whenever contractId, role, or jurisdiction changes
   useEffect(() => {
-    if (!contractId) return;
+    if (!contractId || contractId === "sample-delaware-mcsa") return;
 
     setIsStreaming(true);
     setStreamDone(false);
@@ -348,6 +506,11 @@ export function ReviewWorkspace() {
       setSelectedClauseIndex(1);
       setContractId(data.contract_id);
       setShowUploadModal(false);
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('lexiflow_has_active_workspace', 'true');
+        sessionStorage.setItem('lexiflow_active_contract_id', data.contract_id);
+        sessionStorage.setItem('lexiflow_active_contract_name', uploadFile.name || data.filename || "Uploaded Contract");
+      }
     } catch (err: any) {
       console.error("Upload error:", err);
       setUploadError(err.message || "Failed to upload and analyze contract.");
@@ -444,9 +607,13 @@ export function ReviewWorkspace() {
 
   // Wire export endpoint: hits FastAPI route GET /api/contracts/{contractId}/export?format={exportFormat}
   const handleDownload = () => {
-    if (!contractId) {
-      setShowUploadModal(true);
-      setCopiedToast("Please ingest a contract first");
+    if (!contractId || contractId === 'sample-delaware-mcsa') {
+      if (!contractId) {
+        setShowUploadModal(true);
+        setCopiedToast("Please ingest a contract first");
+      } else {
+        setCopiedToast("Export is available for analyzed uploaded contracts");
+      }
       setTimeout(() => setCopiedToast(""), 3000);
       return;
     }
@@ -606,6 +773,17 @@ Corporate Legal & Risk Operations Group`;
             <span className="text-slate-600">|</span>
             <span className="text-amber-400 font-medium whitespace-nowrap">{role} Stance ({jurisdiction})</span>
           </div>
+
+          {/* Persistent Ingest Button */}
+          <button
+            type="button"
+            onClick={() => setShowUploadModal(true)}
+            className="px-3.5 py-1.5 font-bold tracking-tight text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg flex items-center gap-2 shadow-md transition shrink-0 cursor-pointer"
+            title="Upload Custom Contract"
+          >
+            <Upload className="w-3.5 h-3.5 text-slate-950 shrink-0" />
+            <span>Upload Custom Contract</span>
+          </button>
         </div>
 
         {/* Center: 3 DISTINCT PROMINENT TAB BUTTONS */}
@@ -1871,8 +2049,18 @@ Corporate Legal & Risk Operations Group`;
       {/* ========================================================================= */}
       {showUploadModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0c1322] border border-slate-700/80 rounded-2xl shadow-2xl w-full max-w-lg p-6 text-white space-y-5 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="relative bg-[#0c1322] border border-slate-700/80 rounded-2xl shadow-2xl w-full max-w-lg p-6 text-white space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            {/* Top-Right Dismiss ✕ button */}
+            <button
+              type="button"
+              onClick={handleDismissModal}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white bg-slate-800/40 hover:bg-slate-800 p-1.5 rounded-lg transition"
+              title="Close modal"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4 pr-8">
               <div className="flex items-center space-x-2.5">
                 <div className="w-8 h-8 rounded-lg bg-amber-400/20 text-amber-400 flex items-center justify-center">
                   <Upload className="w-4 h-4" />
@@ -1882,14 +2070,6 @@ Corporate Legal & Risk Operations Group`;
                   <p className="text-xs text-slate-400">PDF or Word (.docx) with PII Scrubbing & Agentic Redlining</p>
                 </div>
               </div>
-              {contractId && (
-                <button
-                  onClick={() => setShowUploadModal(false)}
-                  className="text-slate-400 hover:text-white p-1 rounded-lg"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
             </div>
 
             <form onSubmit={handleUploadSubmit} className="space-y-4">
@@ -1959,15 +2139,13 @@ Corporate Legal & Risk Operations Group`;
               )}
 
               <div className="flex items-center justify-end space-x-3 pt-2">
-                {contractId && (
-                  <button
-                    type="button"
-                    onClick={() => setShowUploadModal(false)}
-                    className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white bg-slate-800"
-                  >
-                    Cancel
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleDismissModal}
+                  className="bg-slate-800/80 border border-slate-700 text-slate-300 px-4 py-2.5 rounded-lg text-xs font-semibold hover:bg-slate-800 transition"
+                >
+                  Explore with Sample Document 📄
+                </button>
                 <button
                   type="submit"
                   disabled={!uploadFile || isUploading}

@@ -14,5 +14,8 @@
     "autoprefixer": "^10.5.5",
     "postcss": "^8.5.28",
     "tailwindcss": "^4.3.3"
+  },
+  "dependencies": {
+    "react-router-dom": "^7.18.5"
   }
 }
