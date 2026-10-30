@@ -1,19 +1,51 @@
 import React, { useState } from 'react';
 import { Wand2, AlertCircle } from 'lucide-react';
+import { useSessionStorage } from '../hooks/useSessionStorage';
+
+interface BuilderFormData {
+  agreementType: string;
+  jurisdiction: string;
+  primaryParty: string;
+  counterParty: string;
+  draftingPosture: string;
+  specialProvisions: string;
+}
+
+const initialFormData: BuilderFormData = {
+  agreementType: 'Master Services Agreement (MSA)',
+  jurisdiction: 'California, United States',
+  primaryParty: 'Acme Technologies Inc.',
+  counterParty: 'Global Enterprise Solutions LLC',
+  draftingPosture: 'Balanced & Mutual',
+  specialProvisions:
+    'Include 30-day cure period for material breach, strict confidentiality with DPDP Act 2023 and GDPR provisions, and mutual indemnity for IP infringement.',
+};
 
 export function ContractBuilder() {
-  const [agreementType, setAgreementType] = useState('Master Services Agreement (MSA)');
-  const [jurisdiction, setJurisdiction] = useState('California, United States');
-  const [primaryParty, setPrimaryParty] = useState('Acme Technologies Inc.');
-  const [counterParty, setCounterParty] = useState('Global Enterprise Solutions LLC');
-  const [draftingPosture, setDraftingPosture] = useState('Balanced & Mutual');
-  const [specialProvisions, setSpecialProvisions] = useState(
-    'Include 30-day cure period for material breach, strict confidentiality with DPDP Act 2023 and GDPR provisions, and mutual indemnity for IP infringement.'
+  const [formData, setFormData] = useSessionStorage<BuilderFormData>(
+    'builder_form_data',
+    initialFormData
+  );
+  const [draftedContract, setDraftedContract] = useSessionStorage<string>(
+    'builder_contract_output',
+    ''
   );
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [draftedContract, setDraftedContract] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const {
+    agreementType,
+    jurisdiction,
+    primaryParty,
+    counterParty,
+    draftingPosture,
+    specialProvisions,
+  } = formData;
+
+  const updateField = (field: keyof BuilderFormData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
 
   const handleGenerate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -84,7 +116,7 @@ export function ContractBuilder() {
               </label>
               <select
                 value={agreementType}
-                onChange={(e) => setAgreementType(e.target.value)}
+                onChange={(e) => updateField('agreementType', e.target.value)}
                 className="w-full bg-[#fbfbfa] border border-slate-300 rounded-xl p-3 text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-800 shadow-inner"
               >
                 <option value="Master Services Agreement (MSA)">Master Services Agreement (MSA)</option>
@@ -101,7 +133,7 @@ export function ContractBuilder() {
               </label>
               <select
                 value={jurisdiction}
-                onChange={(e) => setJurisdiction(e.target.value)}
+                onChange={(e) => updateField('jurisdiction', e.target.value)}
                 className="w-full bg-[#fbfbfa] border border-slate-300 rounded-xl p-3 text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-800 shadow-inner"
               >
                 <option value="California, United States">California, United States</option>
@@ -121,7 +153,7 @@ export function ContractBuilder() {
               <input
                 type="text"
                 value={primaryParty}
-                onChange={(e) => setPrimaryParty(e.target.value)}
+                onChange={(e) => updateField('primaryParty', e.target.value)}
                 placeholder="e.g. Acme Technologies Inc."
                 className="w-full bg-[#fbfbfa] border border-slate-300 rounded-xl p-3 text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-800 shadow-inner"
               />
@@ -134,7 +166,7 @@ export function ContractBuilder() {
               <input
                 type="text"
                 value={counterParty}
-                onChange={(e) => setCounterParty(e.target.value)}
+                onChange={(e) => updateField('counterParty', e.target.value)}
                 placeholder="e.g. Global Enterprise Solutions LLC"
                 className="w-full bg-[#fbfbfa] border border-slate-300 rounded-xl p-3 text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-800 shadow-inner"
               />
@@ -148,7 +180,7 @@ export function ContractBuilder() {
               </label>
               <select
                 value={draftingPosture}
-                onChange={(e) => setDraftingPosture(e.target.value)}
+                onChange={(e) => updateField('draftingPosture', e.target.value)}
                 className="w-full bg-[#fbfbfa] border border-slate-300 rounded-xl p-3 text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-800 shadow-inner"
               >
                 <option value="Balanced & Mutual">Balanced & Mutual (Recommended)</option>
@@ -175,7 +207,7 @@ export function ContractBuilder() {
             <textarea
               rows={4}
               value={specialProvisions}
-              onChange={(e) => setSpecialProvisions(e.target.value)}
+              onChange={(e) => updateField('specialProvisions', e.target.value)}
               placeholder="Specify custom warranties, restrictive covenants, data protection measures, termination triggers, or fallback clauses..."
               className="w-full bg-[#fbfbfa] border border-slate-300 rounded-xl p-3 text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-800 shadow-inner resize-y"
             />

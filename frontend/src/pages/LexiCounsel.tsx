@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { BookOpen, Send, ShieldCheck, Loader2 } from 'lucide-react';
+import { useSessionStorage } from '../hooks/useSessionStorage';
 
 interface Message {
   role: 'user' | 'ai';
@@ -8,14 +9,17 @@ interface Message {
 }
 
 export function LexiCounsel() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'ai',
-      content:
-        'I am Lexi-Counsel, your AI legal expert on the DPDP Act 2023 and Indian Contract Act. How can I assist you today?',
-    },
-  ]);
-  const [input, setInput] = useState('');
+  const [messages, setMessages] = useSessionStorage<Message[]>(
+    'counsel_chat_history',
+    [
+      {
+        role: 'ai',
+        content:
+          'I am Lexi-Counsel, your AI legal expert on the DPDP Act 2023 and Indian Contract Act. How can I assist you today?',
+      },
+    ]
+  );
+  const [input, setInput] = useSessionStorage<string>('counsel_input_query', '');
   const [isLoading, setIsLoading] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);

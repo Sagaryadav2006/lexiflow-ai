@@ -34,18 +34,12 @@ prompt_template = PromptTemplate(
 
 @builder_router.post("/generate")
 async def generate_contract(request: ContractGenerationRequest):
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise HTTPException(
             status_code=500,
-            detail="GEMINI_API_KEY is not configured in the environment."
+            detail="GOOGLE_API_KEY is not configured in the environment."
         )
-
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash",
-        temperature=0.2,
-        google_api_key=os.getenv("GEMINI_API_KEY")
-    )
 
     try:
         formatted_prompt = prompt_template.format(
@@ -57,8 +51,42 @@ async def generate_contract(request: ContractGenerationRequest):
             special_provisions=request.special_provisions
         )
 
-        response = await llm.ainvoke(formatted_prompt)
-        drafted_contract = response.content if hasattr(response, "content") else str(response)
+        try:
+            llm = ChatGoogleGenerativeAI(
+                model="gemini-1.5-flash",
+                temperature=0.2,
+                google_api_key=api_key 
+            )
+            response = await llm.ainvoke(formatted_prompt)
+        except Exception as gemini_err:
+            if "404" in str(gemini_err) or "not found" in str(gemini_err).lower():
+                llm = ChatGoogleGenerativeAI(
+                    model="gemini-3.8-flash",
+                    temperature=0.2,
+                    google_api_key=api_key
+                )
+                response = await llm.ainvoke(formatted_prompt)
+            else:
+                raise gemini_err
+
+        if hasattr(response, "content"):
+            content = response.content
+            if isinstance(content, str):
+                drafted_contract = content
+            elif isinstance(content, list):
+                text_parts = []
+                for item in content:
+                    if isinstance(item, dict) and "text" in item:
+                        text_parts.append(str(item["text"]))
+                    elif isinstance(item, str):
+                        text_parts.append(item)
+                    else:
+                        text_parts.append(str(item))
+                drafted_contract = "".join(text_parts)
+            else:
+                drafted_contract = str(content)
+        else:
+            drafted_contract = str(response)
 
         return {"drafted_contract": drafted_contract}
     except Exception as e:
@@ -66,4 +94,3 @@ async def generate_contract(request: ContractGenerationRequest):
             status_code=500,
             detail=f"Contract generation failed: {str(e)}"
         )
-
