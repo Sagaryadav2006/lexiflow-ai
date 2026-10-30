@@ -1,83 +1,51 @@
-⚖️ LexiFlow AI
+# ⚖️ LexiFlow AI
 
-An Agentic Legal Contract Review & Risk Mitigation Platform
+**Agentic Legal Contract Review & Risk Mitigation Platform**
 
-LexiFlow AI is an enterprise-grade, full-stack application designed to automate the auditing of complex legal agreements, ranging from standard vendor MSAs to multi-page government contracts. By leveraging an agentic AI workflow combined with deterministic legal guardrails, the platform rapidly ingests documents, isolates predatory clauses, and generates playbook-compliant redline amendments in real time.
+![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
+![MongoDB](https://img.shields.io/badge/MongoDB_Atlas-47A248?logo=mongodb)
+![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub_Actions-2088FF?logo=github-actions)
 
-🚀 Live Demo
+LexiFlow AI is an enterprise-grade, full-stack platform designed to automate the auditing of commercial contracts (MSAs, NDAs, Government Procurement). By combining **Zero-Trust Data Privacy**, an **Adversarial LangGraph AI Workflow**, and a **Self-Cleaning Vector CI/CD Pipeline**, LexiFlow reduces contract review turnaround from hours to seconds while preventing data leakage and generative hallucinations.
 
-Frontend (Vercel): https://lexiflow-ai-rouge.vercel.app/
+---
 
-Backend API (Render): Cloud-hosted FastAPI service with Server-Sent Events (SSE).
+## ✨ Core Features
 
-(Note: The backend is hosted on a free cloud tier and may take 30-50 seconds to spin up upon the first upload if it has been inactive).
+*   **🛡️ Zero-Trust PII Shield:** A localized sanitization layer utilizing Microsoft Presidio, a 12MB `spaCy` (`en_core_web_sm`) model, and custom deterministic regex. Reversibly tokenizes sensitive corporate entities, names, and addresses *before* any data reaches cloud LLMs.
+*   **🤖 Adversarial AI State Machine:** Powered by **LangGraph** and the **Groq LPU Engine**, the system utilizes a dual-agent loop. A *Prosecutor Agent* hunts for one-sided risks, while a *Defender Agent* drafts neutral, playbook-compliant redlines.
+*   **🔄 Automated Legal Data Pipeline (CI/CD):** A serverless GitHub Actions cron job triggers monthly to scrape live amendments for the Indian Contract Act and DPDP Act directly from the Wikipedia REST API.
+*   **🧹 Self-Cleaning Vector DB:** The ingestion pipeline utilizes a strict "Wipe-and-Replace" (`delete_many`) safeguard in MongoDB Atlas to purge stale RAG vectors before inserting new ones, ensuring zero database bloat and zero hallucinations.
+*   **⚡ Real-Time Streaming UX:** Fast, asynchronous processing via FastAPI **Server-Sent Events (SSE)**. The React frontend features persistent state mapping via a custom `useSessionStorage` hook, preventing data loss on browser refreshes.
+*   **📄 Executive Export:** One-click `.doc` report generation and native clipboard tools to streamline external negotiation emails.
 
-✨ Core Features
+---
 
-🛡️ Zero-Trust PII Shielding: Integrates Microsoft Presidio, a lightweight spaCy NLP model (en_core_web_sm), and custom deterministic regex. Sensitive entities (names, addresses, organizations) are masked before leaving the server, ensuring strict data privacy compliance (including the DPDP Act 2023) during LLM processing.
+## 🏗️ System Architecture & Tech Stack
 
-⚖️ Dual-Agent Risk Engine (LangGraph): Utilizes a sophisticated "Prosecutor/Defender" architecture powered by the Groq API (GPT-OSS-20b). The Prosecutor node audits isolated clauses for liabilities, while the Defender node drafts clean, natural-language redline amendments to cure identified risks.
+**Frontend:**
+*   React 18 (TypeScript) + Vite
+*   Tailwind CSS & Framer Motion
 
-🚦 Deterministic Legal Guardrails: Bypasses LLM hallucination using a hardcoded Python risk-routing engine. It instantly flags universal commercial hazards—such as uncapped one-way indemnification, predatory 25-year non-competes, and asymmetric termination rights—ensuring 100% accuracy on critical financial risks aligned with the Indian Contract Act 1872.
+**Backend & Agentic Engine:**
+*   FastAPI (ASGI) + Uvicorn
+*   LangGraph (Stateful Agentic Loops)
+*   Groq API (Llama-3-70B / Ultra-low latency inference)
+*   Microsoft Presidio + spaCy (NLP Anonymization)
 
-⚡ Asynchronous SSE Streaming: A multi-processed FastAPI backend splits complex .pdf and .docx files into clean structural nodes and streams the AI analysis back to the client via Server-Sent Events (SSE), eliminating API timeout failures on 20+ page documents.
+**Database & DevOps:**
+*   MongoDB Atlas (Document Storage + Vector Search)
+*   GitHub Actions (Automated cron ingestion)
+*   Vercel (Edge CDN Frontend) + Render (Python Web Service)
 
-📊 Executive Legal Health Suite: A highly interactive React/TypeScript frontend featuring a real-time clause navigation slider, an aggregate financial exposure dashboard, an automated pushback-email generator (which aggregates all critical/high risks), and a conversational AI chat assistant for contract queries.
+---
 
-📑 Dynamic Multi-Format Export: Dynamically compile audited contracts into Native OpenXML Track Changes (.DOCX), Executive Briefs (.PDF), and Structured Telemetry (.JSON) via a modular API routing system.
+## 👥 Team
+**Developed as a Final Year Data Science Capstone Project (B.K. Birla College, Kalyan)**
+*   **Sagar Santosh Yadav:** Backend Engine, AI Agents, PII Guardrails, Cloud DevOps & CI/CD.
+*   **Gouri Nilesh Dhumak:** Frontend UI/UX, Contract Parsing, Redline Diff, Edge CI/CD.
 
-🏗️ System Architecture
-
-Ingestion & Parsing: Multi-engine parsing (pypdf, fitz, python-docx) extracts text and normalizes layout artifacts, splitting the document into strictly isolated clauses.
-
-Anonymization: Presidio and RegEx mask PII into tokens (e.g., <COMPANY_1>, <MONEY_1>).
-
-Guardrail Routing: The system checks clauses against hardcoded deterministic legal rules. If a known severe risk is found, it fast-paths the redline.
-
-Agentic Audit (LangGraph): Novel clauses are passed to the Groq-powered LangGraph pipeline. The Prosecutor grades the risk (0-10); if risky (>=4), the Defender iteratively drafts amendments.
-
-Real-time Streaming: Results are streamed to the React UI via SSE, updating the clause carousel and risk metrics dynamically.
-
-Deanonymization & Export: Redlined text is deanonymized securely and exported via the dynamic multi-format export module or the pushback email generator.
-
-💻 Tech Stack
-
-Frontend
-
-Framework: React, Vite, TypeScript
-
-Styling & UI: Tailwind CSS, Framer Motion, Radix UI (shadcn-inspired), Lucide Icons
-
-Hosting: Vercel (Edge CDN)
-
-Backend
-
-Framework: Python, FastAPI, Uvicorn
-
-AI & NLP: LangGraph, LangChain, Groq API, Microsoft Presidio, spaCy (en_core_web_sm)
-
-Document Processing: pypdf, PyMuPDF (fitz), python-docx, fpdf2
-
-Database: MongoDB Atlas (accessed via motor async driver)
-
-Hosting: Render (Web Service)
-
-🛠️ Local Installation & Setup
-
-Prerequisites
-
-Python 3.10+
-
-Node.js 18+
-
-MongoDB Atlas Cluster
-
-Groq API Key
-
-
-
-📝 License
-
-This project is MIT licensed.
-
-Built with ❤️ by Sagar and Gouri
+## 📄 License
+This project is licensed under the MIT License.
