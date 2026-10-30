@@ -1,4 +1,6 @@
 import os
+import json
+import urllib.request
 from typing import List
 from fastapi import APIRouter, HTTPException
 from dotenv import load_dotenv
@@ -22,6 +24,16 @@ except ImportError:
 
 counsel_router = APIRouter(tags=["Lexi-Counsel"])
 router = counsel_router
+
+def fetch_dynamic_legal_updates():
+    url = "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&titles=Digital_Personal_Data_Protection_Act,_2023|Indian_Contract_Act,_1872&format=json"
+    req = urllib.request.Request(url, headers={'User-Agent': 'LexiFlowAI/1.0'})
+    try:
+        with urllib.request.urlopen(req) as response:
+            pages = json.loads(response.read().decode()).get('query', {}).get('pages', {})
+            return "\n\n---\n\n".join([f"STATUTORY SOURCE: {p.get('title')}\n{p.get('extract', '')}" for p in pages.values()])
+    except:
+        return "Digital Personal Data Protection Act 2023 and Indian Contract Act 1872."
 
 # 1. Initialize Google Generative AI embeddings (lightweight cloud API, resolves RAM OOM)
 embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
@@ -109,6 +121,12 @@ prompt_template = PromptTemplate(
 @counsel_router.post("/seed")
 async def seed_legal_nodes():
     try:
+        # Wipe existing vectors to prevent database bloat
+        vector_store.collection.delete_many({})
+
+        # Call live dynamic fetcher
+        dynamic_updates = fetch_dynamic_legal_updates()
+
         documents = [
             Document(
                 page_content=item["content"],
@@ -116,6 +134,23 @@ async def seed_legal_nodes():
             )
             for item in SEED_LEGAL_DATA
         ]
+
+        if dynamic_updates:
+            sections = [s.strip() for s in dynamic_updates.split("\n\n---\n\n") if s.strip()]
+            for idx, sec in enumerate(sections):
+                chunk_size = 1500
+                for c_idx, start in enumerate(range(0, len(sec), chunk_size)):
+                    chunk_text = sec[start:start+chunk_size].strip()
+                    if chunk_text:
+                        documents.append(
+                            Document(
+                                page_content=chunk_text,
+                                metadata={
+                                    "source": f"Dynamic Legal Corpus ({idx+1}.{c_idx+1})",
+                                    "title": "Live Statutory Encyclopedia Feed"
+                                }
+                            )
+                        )
 
         try:
             MongoDBAtlasVectorSearch.from_documents(
@@ -140,7 +175,7 @@ async def seed_legal_nodes():
                 raise seed_err
 
         return {
-            "message": "Successfully seeded 5 legal knowledge nodes into MongoDBAtlasVectorSearch.",
+            "message": f"Successfully wiped and re-seeded {len(documents)} legal knowledge nodes into MongoDBAtlasVectorSearch.",
             "count": len(documents)
         }
     except Exception as e:
