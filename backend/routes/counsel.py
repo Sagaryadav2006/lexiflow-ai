@@ -97,8 +97,10 @@ SEED_LEGAL_DATA = [
 prompt_template = PromptTemplate(
     input_variables=["context", "question"],
     template=(
-        "You are Lexi-Counsel, an elite Indian legal AI. Answer the user's question based strictly on the provided context. "
-        "If the answer is not in the context, say you cannot provide legal advice on that topic. Context: {context}\n\n"
+        "You are Lexi-Counsel, an elite Indian legal AI. Answer the user's question based on the provided context. "
+        "You are permitted to provide general informational summaries, definitions, and explanations of the statutes provided in the context. "
+        "Only refuse to answer and state 'I cannot provide legal advice' if the user asks for specific legal strategy on a personal case. "
+        "Context: {context}\n\n"
         "Question: {question}\n\n"
         "Answer:"
     )
@@ -149,7 +151,7 @@ async def seed_legal_nodes():
 
 @counsel_router.post("/chat", response_model=CounselChatResponse)
 async def chat_counsel(request: CounselChatRequest):
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
         raise HTTPException(
             status_code=500,

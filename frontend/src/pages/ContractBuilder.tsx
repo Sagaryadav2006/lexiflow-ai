@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Wand2, AlertCircle } from 'lucide-react';
+import { Wand2, AlertCircle, Copy, Download } from 'lucide-react';
 import { useSessionStorage } from '../hooks/useSessionStorage';
 
 interface BuilderFormData {
@@ -87,6 +87,29 @@ export function ContractBuilder() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const contractOutput = draftedContract;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(contractOutput);
+      alert('Contract copied to clipboard!');
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  const handleDownload = () => {
+    const blob = new Blob([contractOutput], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'Drafted_Contract.doc';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -244,6 +267,26 @@ export function ContractBuilder() {
         <div className="mt-8 max-w-4xl mx-auto">
           <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm font-serif leading-loose whitespace-pre-wrap text-slate-900 text-sm">
             {draftedContract}
+          </div>
+
+          {/* Action Buttons: Copy & Download */}
+          <div className="flex gap-4 mt-4">
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold transition shadow-sm cursor-pointer"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>Copy Contract</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleDownload}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold transition shadow-sm cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Download (.doc)</span>
+            </button>
           </div>
         </div>
       )}
