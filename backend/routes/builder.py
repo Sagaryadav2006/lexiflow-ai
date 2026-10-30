@@ -16,19 +16,28 @@ router = builder_router
 
 prompt_template = PromptTemplate(
     input_variables=[
-        "agreement_type",
-        "jurisdiction",
-        "primary_party",
-        "counter_party",
-        "posture",
-        "special_provisions"
+        "agreement_type", "jurisdiction", "primary_party", "counter_party", 
+        "posture", "special_provisions", "full_contract_context", 
+        "current_clause", "user_query"
     ],
     template=(
-        "You are an elite corporate attorney drafting a {agreement_type} under the jurisdiction of {jurisdiction}. "
-        "Party A is {primary_party} and Party B is {counter_party}. "
-        "The drafting posture must heavily favor {posture}. "
-        "Incorporate these special provisions: {special_provisions}. "
-        "Output the contract in clean, professional text format without markdown tables."
+        "You are Lexi-Copilot, an elite corporate attorney and bilingual legal translator. "
+        "Depending on the inputs provided, you have two jobs: \n"
+        "1. DRAFTING: If instructed to draft an agreement, generate a {agreement_type} under the jurisdiction of {jurisdiction}. "
+        "Party A is {primary_party} and Party B is {counter_party}. Heavily favor {posture} and include: {special_provisions}. "
+        "Output clean, professional text without markdown tables.\n\n"
+        
+        "2. COPILOT ANALYSIS: If the user provides a query about an existing clause, you must evaluate it holistically. \n"
+        "GLOBAL CONTRACT CONTEXT: {full_contract_context}\n"
+        "CURRENT CLAUSE FOCUS: {current_clause}\n"
+        "USER QUERY: {user_query}\n\n"
+        
+        "ANALYSIS RULES:\n"
+        "- OVERALL CONTEXT: Always evaluate the CURRENT CLAUSE against the GLOBAL CONTRACT CONTEXT to find hidden traps or contradictions.\n"
+        "- PLAIN ENGLISH: Explain complex risks as if talking to a smart business owner. Avoid heavy legalese.\n"
+        "- RIGHTS VIOLATIONS: Explicitly highlight if the clause suppresses basic rights for individuals (e.g., privacy, right to work) or organizations (e.g., IP theft, unlimited liability).\n"
+        
+        "Answer:"
     )
 )
 
@@ -43,12 +52,15 @@ async def generate_contract(request: ContractGenerationRequest):
 
     try:
         formatted_prompt = prompt_template.format(
-            agreement_type=request.agreement_type,
-            jurisdiction=request.jurisdiction,
-            primary_party=request.primary_party,
-            counter_party=request.counter_party,
-            posture=request.posture,
-            special_provisions=request.special_provisions
+            agreement_type=request.agreement_type or "N/A",
+            jurisdiction=request.jurisdiction or "N/A",
+            primary_party=request.primary_party or "N/A",
+            counter_party=request.counter_party or "N/A",
+            posture=request.posture or "N/A",
+            special_provisions=request.special_provisions or "None",
+            full_contract_context=request.full_contract_context or "No global context provided.",
+            current_clause=request.current_clause or "No specific clause provided.",
+            user_query=request.user_query or "Draft the contract."
         )
 
         try:

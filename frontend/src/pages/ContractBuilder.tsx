@@ -21,7 +21,17 @@ const initialFormData: BuilderFormData = {
     'Include 30-day cure period for material breach, strict confidentiality with DPDP Act 2023 and GDPR provisions, and mutual indemnity for IP infringement.',
 };
 
-export function ContractBuilder() {
+interface ContractBuilderProps {
+  contractState?: { fullText?: string };
+  activeClauseText?: string;
+  userInputValue?: string;
+}
+
+export function ContractBuilder({
+  contractState,
+  activeClauseText,
+  userInputValue,
+}: ContractBuilderProps = {}) {
   const [formData, setFormData] = useSessionStorage<BuilderFormData>(
     'builder_form_data',
     initialFormData
@@ -60,6 +70,9 @@ export function ContractBuilder() {
         counter_party: counterParty,
         posture: draftingPosture,
         special_provisions: specialProvisions,
+        full_contract_context: contractState?.fullText || draftedContract || '',
+        current_clause: activeClauseText || '',
+        user_query: userInputValue || '',
       };
 
       const response = await fetch(
