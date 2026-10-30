@@ -3,10 +3,9 @@ from typing import List
 from fastapi import APIRouter, HTTPException
 from dotenv import load_dotenv
 
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_mongodb import MongoDBAtlasVectorSearch
 from langchain_core.documents import Document
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 
 load_dotenv()
@@ -24,8 +23,8 @@ except ImportError:
 counsel_router = APIRouter(tags=["Lexi-Counsel"])
 router = counsel_router
 
-# 1. Initialize HuggingFace embeddings (384-dimensional vectors)
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+# 1. Initialize Google Generative AI embeddings (lightweight cloud API, resolves RAM OOM)
+embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
 
 # 2. Synchronous MongoDB Collection for Atlas Vector Search
 sync_client = getattr(client, "delegate", client)
@@ -116,12 +115,27 @@ async def seed_legal_nodes():
             for item in SEED_LEGAL_DATA
         ]
 
-        MongoDBAtlasVectorSearch.from_documents(
-            documents=documents,
-            embedding=embeddings,
-            collection=legal_nodes_collection,
-            index_name="vector_index"
-        )
+        try:
+            MongoDBAtlasVectorSearch.from_documents(
+                documents=documents,
+                embedding=embeddings,
+                collection=legal_nodes_collection,
+                index_name="vector_index"
+            )
+        except Exception as seed_err:
+            if "404" in str(seed_err) or "not found" in str(seed_err).lower():
+                fallback_embeddings = GoogleGenerativeAIEmbeddings(
+                    model="models/gemini-embedding-001",
+                    output_dimensionality=768
+                )
+                MongoDBAtlasVectorSearch.from_documents(
+                    documents=documents,
+                    embedding=fallback_embeddings,
+                    collection=legal_nodes_collection,
+                    index_name="vector_index"
+                )
+            else:
+                raise seed_err
 
         return {
             "message": "Successfully seeded 5 legal knowledge nodes into MongoDBAtlasVectorSearch.",
@@ -147,7 +161,21 @@ async def chat_counsel(request: CounselChatRequest):
 
     # 1. Attempt similarity search on vector store
     try:
-        retrieved_docs = vector_store.similarity_search(request.query, k=3)
+        try:
+            retrieved_docs = vector_store.similarity_search(request.query, k=3)
+        except Exception as search_err:
+            if "404" in str(search_err) or "not found" in str(search_err).lower():
+                fallback_store = MongoDBAtlasVectorSearch(
+                    collection=legal_nodes_collection,
+                    embedding=GoogleGenerativeAIEmbeddings(
+                        model="models/gemini-embedding-001",
+                        output_dimensionality=768
+                    ),
+                    index_name="vector_index"
+                )
+                retrieved_docs = fallback_store.similarity_search(request.query, k=3)
+            else:
+                raise search_err
     except Exception as search_err:
         print(f"[Lexi-Counsel] Vector search fallback triggered: {search_err}")
 
