@@ -27,15 +27,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Route Registrations
 app.include_router(contracts.router, prefix="/api/contracts", tags=["Contracts"])
 app.include_router(clauses.router, prefix="/api/clauses", tags=["Clauses"])
-app.include_router(builder_router, prefix="/api/contracts")
-app.include_router(counsel_router, prefix="/api/counsel")
+
+# New Enterprise Suite Routes
+app.include_router(builder_router, prefix="/api/contracts", tags=["Builder"])
+app.include_router(counsel_router, prefix="/api/counsel", tags=["Counsel"])
 
 @app.get("/")
 async def root():
     return {"message": "LexiFlow AI API is running"}
-
 
 @app.get("/export/docx/{contract_id}", tags=["Export"])
 async def export_contract_docx_root(contract_id: str):
