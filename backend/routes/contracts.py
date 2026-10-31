@@ -535,11 +535,38 @@ CONVERSATION HISTORY:
 USER QUESTION:
 {user_message_masked}
 """
-        response = await llm.ainvoke(prompt)
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        import os
+
+        api_key = os.getenv("GEMINI_COPILOT_API_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        try:
+            llm = ChatGoogleGenerativeAI(
+                model="gemini-1.5-flash",
+                google_api_key=api_key,
+                temperature=0.2
+            )
+            response = await llm.ainvoke(prompt)
+        except Exception as gemini_err:
+            if "404" in str(gemini_err) or "not found" in str(gemini_err).lower():
+                llm = ChatGoogleGenerativeAI(
+                    model="gemini-3.8-flash",
+                    google_api_key=api_key,
+                    temperature=0.2
+                )
+                response = await llm.ainvoke(prompt)
+            else:
+                raise gemini_err
+
+        reply_content = response.content
+        if isinstance(reply_content, list):
+            reply_content = "".join([
+                item.get("text", str(item)) if isinstance(item, dict) else str(item)
+                for item in reply_content
+            ])
 
         new_messages = [
             {"role": "user", "content": user_message_masked},
-            {"role": "model", "content": response.content}
+            {"role": "model", "content": reply_content}
         ]
 
         if contract_oid:
@@ -548,7 +575,7 @@ USER QUESTION:
                 {"$push": {"chat_history": {"$each": new_messages}}}
             )
 
-        return {"reply": response.content}
+        return {"reply": reply_content}
     except Exception as e:
         import traceback
         traceback.print_exc()
