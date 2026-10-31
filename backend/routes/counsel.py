@@ -35,8 +35,14 @@ def fetch_dynamic_legal_updates():
     except:
         return "Digital Personal Data Protection Act 2023 and Indian Contract Act 1872."
 
+# Isolated API Key for Counsel / Copilot
+counsel_api_key = os.getenv("GEMINI_COPILOT_API_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+
 # 1. Initialize Google Generative AI embeddings (lightweight cloud API, resolves RAM OOM)
-embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
+embeddings = GoogleGenerativeAIEmbeddings(
+    model="models/text-embedding-004",
+    google_api_key=counsel_api_key
+)
 
 # 2. Synchronous MongoDB Collection for Atlas Vector Search
 sync_client = getattr(client, "delegate", client)
@@ -109,11 +115,9 @@ SEED_LEGAL_DATA = [
 prompt_template = PromptTemplate(
     input_variables=["context", "question"],
     template=(
-        "You are Lexi-Counsel, an elite Indian legal AI assistant. "
-        "1. First, search the provided Context for the answer to the user's question. If the answer is there, use it as your primary source. "
-        "2. If the Context does not contain the answer, you MUST fallback to your own general knowledge of contract law, legal principles, or business definitions (e.g., explaining what an NDA is). "
-        "3. When using your general knowledge, briefly state: 'While this specific term is not in the indexed statutes, generally speaking...' to maintain transparency. "
-        "4. NEVER invent fake legal clauses. Only refuse to answer if the user asks for specific legal strategy on a personal case, stating 'I cannot provide legal advice'. "
+        "You are Lexi-Counsel, an elite Indian legal AI. Answer the user's question based on the provided context. "
+        "You are permitted to provide general informational summaries, definitions, and explanations of the statutes provided in the context. "
+        "Only refuse to answer and state 'I cannot provide legal advice' if the user asks for specific legal strategy on a personal case. "
         "Context: {context}\n\n"
         "Question: {question}\n\n"
         "Answer:"
@@ -165,7 +169,8 @@ async def seed_legal_nodes():
             if "404" in str(seed_err) or "not found" in str(seed_err).lower():
                 fallback_embeddings = GoogleGenerativeAIEmbeddings(
                     model="models/gemini-embedding-001",
-                    output_dimensionality=768
+                    output_dimensionality=768,
+                    google_api_key=counsel_api_key
                 )
                 MongoDBAtlasVectorSearch.from_documents(
                     documents=documents,
@@ -188,7 +193,7 @@ async def seed_legal_nodes():
 
 @counsel_router.post("/chat", response_model=CounselChatResponse)
 async def chat_counsel(request: CounselChatRequest):
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    api_key = os.getenv("GEMINI_COPILOT_API_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
         raise HTTPException(
             status_code=500,
@@ -208,7 +213,8 @@ async def chat_counsel(request: CounselChatRequest):
                     collection=legal_nodes_collection,
                     embedding=GoogleGenerativeAIEmbeddings(
                         model="models/gemini-embedding-001",
-                        output_dimensionality=768
+                        output_dimensionality=768,
+                        google_api_key=api_key
                     ),
                     index_name="vector_index"
                 )

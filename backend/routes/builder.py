@@ -16,16 +16,24 @@ router = builder_router
 
 prompt_template = PromptTemplate(
     input_variables=[
-        "agreement_type", "jurisdiction", "primary_party", "counter_party", 
-        "posture", "special_provisions", "full_contract_context", 
-        "current_clause", "user_query"
+        "agreement_type",
+        "jurisdiction",
+        "primary_party",
+        "counter_party",
+        "posture",
+        "special_provisions",
+        "full_contract_context",
+        "current_clause",
+        "user_query"
     ],
     template=(
-        "You are Lexi-Copilot, an elite corporate attorney and bilingual legal translator. "
-        "Depending on the inputs provided, you have two jobs: \n"
-        "1. DRAFTING: If instructed to draft an agreement, generate a {agreement_type} under the jurisdiction of {jurisdiction}. "
-        "Party A is {primary_party} and Party B is {counter_party}. Heavily favor {posture} and include: {special_provisions}. "
-        "Output clean, professional text without markdown tables.\n\n"
+        "You are an elite corporate attorney with two core modes: Contract Drafting and Copilot Clause Analysis.\n\n"
+        
+        "1. DRAFTING MODE: If the user requests drafting a contract, draft a {agreement_type} under the jurisdiction of {jurisdiction}. "
+        "Party A is {primary_party} and Party B is {counter_party}. "
+        "The drafting posture must heavily favor {posture}. "
+        "Incorporate these special provisions: {special_provisions}. "
+        "Output the contract in clean, professional text format without markdown tables.\n\n"
         
         "2. COPILOT ANALYSIS: If the user provides a query about an existing clause, you must evaluate it holistically. \n"
         "GLOBAL CONTRACT CONTEXT: {full_contract_context}\n"
@@ -43,11 +51,11 @@ prompt_template = PromptTemplate(
 
 @builder_router.post("/generate")
 async def generate_contract(request: ContractGenerationRequest):
-    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GEMINI_COPILOT_API_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
         raise HTTPException(
             status_code=500,
-            detail="GOOGLE_API_KEY is not configured in the environment."
+            detail="GOOGLE_API_KEY or GEMINI_COPILOT_API_KEY is not configured in the environment."
         )
 
     try:

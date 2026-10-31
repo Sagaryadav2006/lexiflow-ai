@@ -6,6 +6,8 @@ from langchain_community.tools import DuckDuckGoSearchRun
 from langgraph.prebuilt import create_react_agent
 import asyncio
 import re
+import time
+import logging
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -39,6 +41,23 @@ prosecutor_agent = create_react_agent(llm, tools=[search_tool])
 
 structured_llm = llm.with_structured_output(ProsecutorOutput)
 defender_llm = llm.with_structured_output(DefenderOutput)
+
+
+def execute_with_backoff(func, *args, max_retries=4, **kwargs):
+    base_delay = 2
+    for attempt in range(max_retries):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            err_msg = str(e)
+            if "429" in err_msg or "Too Many Requests" in err_msg or "Rate limit" in err_msg or "rate_limit" in err_msg.lower():
+                if attempt == max_retries - 1:
+                    raise e
+                sleep_time = base_delay * (2 ** attempt)
+                logging.warning(f"Groq rate limit hit. Retrying clause in {sleep_time}s...")
+                time.sleep(sleep_time)
+            else:
+                raise e
 
 
 def prosecutor_node(state: ClauseReviewState):
@@ -91,7 +110,7 @@ Clause text:
 """
 
     print(f"[Pipeline] Processing clause {state.get('clause_id')} for {role} in {jurisdiction}...")
-    result = structured_llm.invoke(prompt)
+    result = execute_with_backoff(structured_llm.invoke, prompt)
 
     return {
         "risk_score": result.risk_score,
@@ -128,7 +147,7 @@ Rewrite the following contract clause to resolve these identified risks from the
 Clause text:
 {text_to_amend}
 """
-    result = defender_llm.invoke(prompt)
+    result = execute_with_backoff(defender_llm.invoke, prompt)
 
     return {
         "playbook_rules": result.playbook_rules,
@@ -495,7 +514,7 @@ async def analyze_clause(clause_text: str, role: str = "Buyer", jurisdiction: st
     )
 
     try:
-        final_state = await asyncio.wait_for(agent_graph.ainvoke(initial_state), timeout=15.0)
+        final_state = await asyncio.wait_for(agent_graph.ainvoke(initial_state), timeout=60.0)
     except Exception as e:
         print(f"[Graph fallback - rate limit or timeout]: {e}")
         final_state = initial_state
